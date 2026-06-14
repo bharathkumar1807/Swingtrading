@@ -223,7 +223,7 @@ public sealed partial class IntradayService(IApplicationDbContext db, IUserConte
         var qty = ParseDecimal(m.Groups["qty"].Value);
         var fees = ParseDecimal(m.Groups["fees"].Value);
         var netAmount = ParseDecimal(m.Groups["netAmount"].Value);
-        var tradeDate = DateTime.ParseExact(m.Groups["date"].Value, "MM/dd/yyyy", UsCulture);
+        var tradeDate = DateTime.SpecifyKind(DateTime.ParseExact(m.Groups["date"].Value, "MM/dd/yyyy", UsCulture), DateTimeKind.Utc);
         return new Execution
         {
             Symbol = symbol,
