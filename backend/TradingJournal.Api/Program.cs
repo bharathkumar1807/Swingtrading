@@ -2,12 +2,15 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.OpenApi.Models;
 using Serilog;
 using TradingJournal.Api.Services;
 using TradingJournal.Application.Abstractions;
 using TradingJournal.Application.Trades;
 using TradingJournal.Infrastructure;
+using TradingJournal.Infrastructure.Identity;
 using TradingJournal.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -69,12 +72,39 @@ if (app.Configuration.GetValue("Database:EnsureCreatedOnStartup", true))
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await db.EnsureIntradayTablesAsync(app.Logger);
+
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        const string demoEmail = "trader@example.com";
+        if (await userManager.FindByEmailAsync(demoEmail) is null)
+        {
+            var demo = new ApplicationUser { Email = demoEmail, UserName = demoEmail, FullName = "Demo Trader" };
+            var result = await userManager.CreateAsync(demo, "Password123");
+            if (!result.Succeeded)
+                app.Logger.LogWarning("Demo seed failed: {Errors}", string.Join("; ", result.Errors.Select(e => e.Description)));
+            else
+                app.Logger.LogInformation("Demo account seeded: {Email}", demoEmail);
+        }
     }
     catch (Exception ex)
     {
         app.Logger.LogWarning("Failed to ensure database created: {Message}", ex.Message);
     }
 }
+
+app.UseExceptionHandler(exApp => exApp.Run(async ctx =>
+{
+    var feature = ctx.Features.Get<IExceptionHandlerFeature>();
+    var ex = feature?.Error;
+    ctx.Response.ContentType = "application/json";
+    ctx.Response.StatusCode = ex switch
+    {
+        UnauthorizedAccessException => StatusCodes.Status401Unauthorized,
+        InvalidOperationException => StatusCodes.Status400BadRequest,
+        _ => StatusCodes.Status500InternalServerError
+    };
+    await ctx.Response.WriteAsJsonAsync(new { error = ex?.Message ?? "An unexpected error occurred." });
+}));
 
 app.UseSerilogRequestLogging();
 app.UseSwagger();

@@ -86,6 +86,69 @@ export interface MistakeAnalytics {
   insights: string[];
 }
 
+export interface IntradayExecution {
+  id: string;
+  symbol: string;
+  companyName: string;
+  side: "Buy" | "Sell";
+  price: number;
+  quantity: number;
+  principal: number;
+  fees: number;
+  netAmount: number;
+  tradeDate: string;
+  sequenceOrder: number;
+  intradayTradeId?: string;
+}
+
+export interface IntradayTradeEntry {
+  id: string;
+  symbol: string;
+  companyName: string;
+  totalBuyQty: number;
+  totalSellQty: number;
+  avgBuyPrice: number;
+  avgSellPrice: number;
+  matchedQty: number;
+  pnl: number;
+  openBuyQty: number;
+  priorPositionSellQty: number;
+  isFullyClosed: boolean;
+  outcome: "Win" | "Loss" | "Breakeven" | "Open";
+  executions: IntradayExecution[];
+}
+
+export interface IntradaySessionSummary {
+  id: string;
+  sessionDate: string;
+  broker: string;
+  totalPnl: number;
+  winCount: number;
+  lossCount: number;
+  totalExecutions: number;
+  symbols: string[];
+}
+
+export interface IntradaySession {
+  id: string;
+  sessionDate: string;
+  broker: string;
+  totalPnl: number;
+  winCount: number;
+  lossCount: number;
+  breakevenCount: number;
+  totalExecutions: number;
+  symbols: string[];
+  intradayTrades: IntradayTradeEntry[];
+}
+
+export interface IntradayPreview {
+  sessionDate: string;
+  broker: string;
+  totalExecutions: number;
+  trades: IntradayTradeEntry[];
+}
+
 export interface Review {
   weekly: {
     winRate: number;

@@ -9,23 +9,26 @@ public sealed class AnalyticsReviewWorker(IServiceProvider services, ILogger<Ana
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        try
         {
-            try
+            using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
+            while (await timer.WaitForNextTickAsync(stoppingToken))
             {
-                using var scope = services.CreateScope();
-                _ = scope.ServiceProvider.GetRequiredService<AnalyticsService>();
-                logger.LogInformation("Analytics review heartbeat completed at {Time}", DateTimeOffset.UtcNow);
+                try
+                {
+                    using var scope = services.CreateScope();
+                    _ = scope.ServiceProvider.GetRequiredService<AnalyticsService>();
+                    logger.LogInformation("Analytics review heartbeat completed at {Time}", DateTimeOffset.UtcNow);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Analytics review worker failed");
+                }
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Analytics review worker failed");
-            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown cancellation — not an error.
         }
     }
 }

@@ -9,6 +9,7 @@ using TradingJournal.Application.Abstractions;
 using TradingJournal.Application.Analytics;
 using TradingJournal.Application.Exports;
 using TradingJournal.Application.Imports;
+using TradingJournal.Application.Intraday;
 using TradingJournal.Application.Trades;
 using TradingJournal.Infrastructure.Auth;
 using TradingJournal.Infrastructure.Files;
@@ -69,6 +70,7 @@ public static class DependencyInjection
         services.AddScoped<AnalyticsService>();
         services.AddScoped<ExportService>();
         services.AddScoped<StatementImportService>();
+        services.AddScoped<IntradayService>();
         services.AddHostedService<AnalyticsReviewWorker>();
         return services;
     }

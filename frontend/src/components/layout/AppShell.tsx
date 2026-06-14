@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BarChart3, BookOpenCheck, Brain, ChevronRight, LineChart, LogOut, PieChart, Settings, Table2, TrendingUp } from "lucide-react";
+import { BarChart3, BookOpenCheck, Brain, ChevronRight, LineChart, LogOut, PieChart, Settings, Table2, TrendingUp, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const nav = [
   { to: "/", label: "Dashboard", icon: LineChart },
   { to: "/trades", label: "Trades", icon: Table2 },
+  { to: "/intraday", label: "Intraday", icon: Zap },
   { to: "/review", label: "Review", icon: BookOpenCheck },
   { to: "/mistakes", label: "Mistakes", icon: Brain },
   { to: "/strategies", label: "Strategies", icon: PieChart },

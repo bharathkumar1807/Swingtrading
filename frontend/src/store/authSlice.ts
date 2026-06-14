@@ -14,8 +14,10 @@ const initialState: AuthState = {
 
 function authError(error: unknown) {
   if (typeof error === "object" && error && "response" in error) {
-    const response = (error as { response?: { data?: unknown } }).response;
-    if (typeof response?.data === "string") return response.data;
+    const data = (error as { response?: { data?: unknown } }).response?.data;
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object" && "error" in data && typeof (data as Record<string, unknown>).error === "string")
+      return (data as { error: string }).error;
   }
   return "Could not reach the API. Start the backend, then try again.";
 }
