@@ -56,8 +56,12 @@ export function UploadIntradayModal({
       onImported();
       onOpenChange(false);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Import failed.";
-      setError(msg.includes("already exists") ? `A session for ${formatDate(preview.sessionDate)} already exists.` : "Import failed. Please try again.");
+      const backendMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      if (backendMsg?.includes("already exists")) {
+        setError(`A session for ${formatDate(preview.sessionDate)} already exists.`);
+      } else {
+        setError(backendMsg ?? "Import failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
