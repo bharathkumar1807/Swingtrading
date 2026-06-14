@@ -64,9 +64,16 @@ var app = builder.Build();
 
 if (app.Configuration.GetValue("Database:EnsureCreatedOnStartup", true))
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.EnsureCreatedAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("Failed to ensure database created: {Message}", ex.Message);
+    }
 }
 
 app.UseSerilogRequestLogging();
