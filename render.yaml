@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: trading-journal-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Database__Provider
+        value: PostgreSql
+      - key: Database__EnsureCreatedOnStartup
+        value: "true"
+      - key: ConnectionStrings__PostgreSqlConnection
+        sync: false
+      - key: Jwt__Issuer
+        value: TradingJournal
+      - key: Jwt__Audience
+        value: TradingJournal
+      - key: Jwt__SigningKey
+        generateValue: true
+      - key: Cors__Origins__0
+        sync: false
