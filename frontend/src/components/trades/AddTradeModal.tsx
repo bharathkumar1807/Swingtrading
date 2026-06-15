@@ -1,9 +1,15 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { X } from "lucide-react";
+import { AlertTriangle, X } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { tradesApi, type UpsertTrade } from "@/services/tradesApi";
+
+function toDatetimeLocal(iso: string) {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 const mistakes = ["Entered too early", "Entered too late", "Moved stop-loss", "Over-leveraged", "Emotional entry", "Overtrading"];
 
@@ -28,22 +34,27 @@ const emptyTrade: UpsertTrade = {
   exitDate: undefined,
 };
 
-export function AddTradeModal({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; onSaved: () => void }) {
+export function AddTradeModal({ open, onOpenChange, onSaved }: { open: boolean; onOpenChange: (open: boolean) => void; onSaved: () => void; }) {
   const [form, setForm] = useState<UpsertTrade>(emptyTrade);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<string>();
+  const [error, setError] = useState<string>();
 
   const update = (key: keyof UpsertTrade, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaving(true);
+    setError(undefined);
     try {
       await tradesApi.create(form);
       onSaved();
       onOpenChange(false);
       setForm(emptyTrade);
       setPreview(undefined);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setError(msg ?? "Failed to save trade. Check all required fields and try again.");
     } finally {
       setSaving(false);
     }
@@ -61,7 +72,7 @@ export function AddTradeModal({ open, onOpenChange, onSaved }: { open: boolean; 
   const estimatedPnl = (form.positionType === "Short" ? Number(form.entryPrice) - exit : exit - Number(form.entryPrice)) * Number(form.size || 0) - Number(form.fees || 0) - Number(form.slippage || 0);
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) { setError(undefined); setPreview(undefined); setForm(emptyTrade); } onOpenChange(o); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm" />
         <Dialog.Content className="fixed right-0 top-0 z-50 h-full w-full max-w-3xl overflow-y-auto border-l border-border bg-background p-6 shadow-2xl">
@@ -81,8 +92,8 @@ export function AddTradeModal({ open, onOpenChange, onSaved }: { open: boolean; 
             {(["entryPrice", "exitPrice", "stopLoss", "size", "fees", "slippage"] as const).map((field) => (
               <label key={field} className="text-sm font-semibold capitalize">{field.replace(/([A-Z])/g, " $1")}<Input className="mt-1" type="number" step="0.01" value={form[field] ?? ""} onChange={(e) => update(field, e.target.value === "" ? undefined : Number(e.target.value))} required={field !== "exitPrice"} /></label>
             ))}
-            <label className="text-sm font-semibold">Entry date<Input className="mt-1" type="datetime-local" onChange={(e) => update("entryDate", new Date(e.target.value).toISOString())} /></label>
-            <label className="text-sm font-semibold">Exit date<Input className="mt-1" type="datetime-local" onChange={(e) => update("exitDate", e.target.value ? new Date(e.target.value).toISOString() : undefined)} /></label>
+            <label className="text-sm font-semibold">Entry date<Input className="mt-1" type="datetime-local" value={toDatetimeLocal(form.entryDate)} onChange={(e) => update("entryDate", e.target.value ? new Date(e.target.value).toISOString() : form.entryDate)} required /></label>
+            <label className="text-sm font-semibold">Exit date<Input className="mt-1" type="datetime-local" value={form.exitDate ? toDatetimeLocal(form.exitDate) : ""} onChange={(e) => update("exitDate", e.target.value ? new Date(e.target.value).toISOString() : undefined)} /></label>
             <label className="text-sm font-semibold md:col-span-2">Tags<Input className="mt-1" placeholder="breakout, nifty, morning" onChange={(e) => update("tags", e.target.value.split(",").map((x) => x.trim()))} /></label>
             <div className="md:col-span-2">
               <p className="mb-2 text-sm font-semibold">Mistake tags</p>
@@ -103,6 +114,11 @@ export function AddTradeModal({ open, onOpenChange, onSaved }: { open: boolean; 
                 <span>R multiple: <b>{estimatedRisk ? (estimatedPnl / estimatedRisk).toFixed(2) : "0.00"}</b></span>
               </div>
             </div>
+            {error && (
+              <div className="md:col-span-2 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-500/10 dark:text-rose-300">
+                <AlertTriangle size={16} className="shrink-0" /> {error}
+              </div>
+            )}
             <div className="flex justify-end gap-3 md:col-span-2">
               <Dialog.Close asChild><Button type="button" variant="outline">Cancel</Button></Dialog.Close>
               <Button disabled={saving}>{saving ? "Saving..." : "Save trade"}</Button>

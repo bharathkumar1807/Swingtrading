@@ -40,6 +40,23 @@ export interface ChartPoint {
   value: number;
 }
 
+export interface DailyPnl {
+  date: string;
+  pnl: number;
+  tradeCount: number;
+  wins: number;
+  losses: number;
+}
+
+export interface ExtendedKpis {
+  profitFactor: number;
+  expectancy: number;
+  maxDrawdown: number;
+  currentStreak: number;
+  maxWinStreak: number;
+  maxLossStreak: number;
+}
+
 export interface StrategyMetric {
   strategy: string;
   trades: number;
@@ -56,10 +73,12 @@ export interface Dashboard {
     averageRMultiple: number;
     totalTrades: number;
   };
+  extendedKpis: ExtendedKpis;
   equityCurve: ChartPoint[];
   sectorAllocation: ChartPoint[];
   weeklyPerformance: ChartPoint[];
   monthlyPerformance: ChartPoint[];
+  dailyCalendar: DailyPnl[];
   topWinners: TradePerformanceRow[];
   topLosers: TradePerformanceRow[];
   strategies: StrategyMetric[];

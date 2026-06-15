@@ -13,12 +13,30 @@ public sealed class AnalyticsService(IApplicationDbContext db, IUserContext user
         var trades = await UserTrades().OrderBy(t => t.EntryDate).ToListAsync(cancellationToken);
         var closed = trades.Where(t => t.Outcome != TradeOutcome.Open).ToList();
         var wins = closed.Count(t => t.Pnl > 0);
+        var losses = closed.Count(t => t.Pnl < 0);
         var kpis = new KpiSummary(
             closed.Count == 0 ? 0 : Math.Round((decimal)wins / closed.Count * 100, 2),
             trades.Where(t => t.Pnl > 0).Sum(t => t.Pnl),
             trades.Where(t => t.Pnl < 0).Sum(t => t.Pnl),
             closed.Count == 0 ? 0 : Math.Round(closed.Average(t => t.RMultiple), 2),
             trades.Count);
+
+        var grossWin = closed.Where(t => t.Pnl > 0).Sum(t => t.Pnl);
+        var grossLoss = Math.Abs(closed.Where(t => t.Pnl < 0).Sum(t => t.Pnl));
+        var profitFactor = grossLoss == 0 ? (grossWin > 0 ? 99.99m : 1m) : Math.Round(grossWin / grossLoss, 2);
+
+        var winRate = closed.Count == 0 ? 0m : (decimal)wins / closed.Count;
+        var avgWinR = wins > 0 ? closed.Where(t => t.Pnl > 0).Average(t => t.RMultiple) : 0;
+        var avgLossR = losses > 0 ? closed.Where(t => t.Pnl < 0).Average(t => t.RMultiple) : 0;
+        var expectancy = Math.Round(winRate * avgWinR + (1 - winRate) * avgLossR, 2);
+
+        var extendedKpis = new ExtendedKpis(
+            profitFactor,
+            expectancy,
+            ComputeMaxDrawdown(trades),
+            ComputeStreaks(closed).current,
+            ComputeStreaks(closed).maxWin,
+            ComputeStreaks(closed).maxLoss);
 
         decimal running = 0;
         var equity = trades.Select(t =>
@@ -27,12 +45,25 @@ public sealed class AnalyticsService(IApplicationDbContext db, IUserContext user
             return new ChartPoint(t.EntryDate.ToString("MMM dd"), running);
         }).ToList();
 
+        var dailyCalendar = trades
+            .GroupBy(t => t.EntryDate.Date)
+            .Select(g => new DailyPnl(
+                g.Key.ToString("yyyy-MM-dd"),
+                Math.Round(g.Sum(t => t.Pnl), 2),
+                g.Count(),
+                g.Count(t => t.Pnl > 0),
+                g.Count(t => t.Pnl < 0)))
+            .OrderBy(x => x.Date)
+            .ToList();
+
         return new DashboardDto(
             kpis,
+            extendedKpis,
             equity,
             trades.GroupBy(t => t.Sector).Select(g => new ChartPoint(g.Key, g.Count())).ToList(),
             trades.GroupBy(t => StartOfWeek(t.EntryDate)).Select(g => new ChartPoint(g.Key.ToString("MMM dd"), g.Sum(t => t.Pnl))).ToList(),
             trades.GroupBy(t => new DateTime(t.EntryDate.Year, t.EntryDate.Month, 1)).Select(g => new ChartPoint(g.Key.ToString("MMM yyyy"), g.Sum(t => t.Pnl))).ToList(),
+            dailyCalendar,
             trades.OrderByDescending(t => t.Pnl).Take(5).Select(ToPerformanceRow).ToList(),
             trades.OrderBy(t => t.Pnl).Take(5).Select(ToPerformanceRow).ToList(),
             BuildStrategyMetrics(trades),
@@ -98,4 +129,35 @@ public sealed class AnalyticsService(IApplicationDbContext db, IUserContext user
 
     private static TradePerformanceRow ToPerformanceRow(Trade t) => new(t.Id, t.Symbol, t.Strategy, t.Pnl, t.RMultiple, t.EntryDate);
     private static DateTime StartOfWeek(DateTime date) => date.Date.AddDays(-(int)date.DayOfWeek);
+
+    private static decimal ComputeMaxDrawdown(IEnumerable<Trade> trades)
+    {
+        decimal peak = 0, equity = 0, maxDd = 0;
+        foreach (var t in trades.OrderBy(t => t.EntryDate))
+        {
+            equity += t.Pnl;
+            if (equity > peak) peak = equity;
+            var dd = peak - equity;
+            if (dd > maxDd) maxDd = dd;
+        }
+        return Math.Round(maxDd, 2);
+    }
+
+    private static (int current, int maxWin, int maxLoss) ComputeStreaks(IEnumerable<Trade> closedTrades)
+    {
+        int run = 0, maxWin = 0, maxLoss = 0;
+        bool? lastWin = null;
+        foreach (var t in closedTrades.OrderBy(t => t.ExitDate ?? t.EntryDate))
+        {
+            var isWin = t.Pnl > 0;
+            if (lastWin == null || lastWin == isWin)
+                run = isWin ? run + 1 : run - 1;
+            else
+                run = isWin ? 1 : -1;
+            lastWin = isWin;
+            if (run > 0 && run > maxWin) maxWin = run;
+            if (run < 0 && Math.Abs(run) > maxLoss) maxLoss = Math.Abs(run);
+        }
+        return (run, maxWin, maxLoss);
+    }
 }

@@ -1,14 +1,18 @@
 namespace TradingJournal.Application.Analytics;
 
 public sealed record KpiSummary(decimal WinRate, decimal TotalProfit, decimal TotalLoss, decimal AverageRMultiple, int TotalTrades);
+public sealed record ExtendedKpis(decimal ProfitFactor, decimal Expectancy, decimal MaxDrawdown, int CurrentStreak, int MaxWinStreak, int MaxLossStreak);
+public sealed record DailyPnl(string Date, decimal Pnl, int TradeCount, int Wins, int Losses);
 public sealed record ChartPoint(string Label, decimal Value);
 public sealed record StrategyMetric(string Strategy, int Trades, decimal WinRate, decimal Pnl, decimal AverageRMultiple);
 public sealed record DashboardDto(
     KpiSummary Kpis,
+    ExtendedKpis ExtendedKpis,
     IReadOnlyList<ChartPoint> EquityCurve,
     IReadOnlyList<ChartPoint> SectorAllocation,
     IReadOnlyList<ChartPoint> WeeklyPerformance,
     IReadOnlyList<ChartPoint> MonthlyPerformance,
+    IReadOnlyList<DailyPnl> DailyCalendar,
     IReadOnlyList<TradePerformanceRow> TopWinners,
     IReadOnlyList<TradePerformanceRow> TopLosers,
     IReadOnlyList<StrategyMetric> Strategies,
