@@ -1,5 +1,5 @@
 # Build and run TradingJournal Backend
-FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM public.ecr.aws/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["backend/TradingJournal.Api/TradingJournal.Api.csproj", "TradingJournal.Api/"]
 COPY ["backend/TradingJournal.Application/TradingJournal.Application.csproj", "TradingJournal.Application/"]
@@ -12,7 +12,7 @@ RUN dotnet build "TradingJournal.Api/TradingJournal.Api.csproj" -c Release -o /a
 FROM build AS publish
 RUN dotnet publish "TradingJournal.Api/TradingJournal.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-FROM --platform=linux/amd64 mcr.microsoft.com/dotnet/aspnet:8.0
+FROM public.ecr.aws/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=publish /app/publish .
 EXPOSE 8080
