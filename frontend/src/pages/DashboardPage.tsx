@@ -24,9 +24,11 @@ export function DashboardPage() {
   if (!data || data.kpis.totalTrades === 0)
     return <EmptyState title="No trades yet" description="Add your first trade to activate dashboard analytics, equity curves, and review summaries." />;
 
-  const { kpis, extendedKpis, equityCurve, sectorAllocation, weeklyPerformance, strategies, dailyCalendar } = data;
+  const { kpis, equityCurve, sectorAllocation, weeklyPerformance, strategies } = data;
+  const extendedKpis = data.extendedKpis;
+  const dailyCalendar = data.dailyCalendar ?? [];
 
-  const streak = extendedKpis.currentStreak;
+  const streak = extendedKpis?.currentStreak ?? 0;
   const streakLabel = streak === 0 ? "—" : streak > 0 ? `${streak}W` : `${Math.abs(streak)}L`;
   const streakPositive = streak >= 0;
 
@@ -42,37 +44,39 @@ export function DashboardPage() {
       </section>
 
       {/* Row 2: Advanced stats */}
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatBadge
-          label="Profit factor"
-          value={extendedKpis.profitFactor >= 99 ? "∞" : extendedKpis.profitFactor.toFixed(2)}
-          sub="gross win / gross loss"
-          positive={extendedKpis.profitFactor >= 1.5}
-          neutral={extendedKpis.profitFactor >= 1 && extendedKpis.profitFactor < 1.5}
-          icon={<Zap size={16} />}
-        />
-        <StatBadge
-          label="Expectancy"
-          value={`${extendedKpis.expectancy >= 0 ? "+" : ""}${extendedKpis.expectancy.toFixed(2)}R`}
-          sub="avg R per trade"
-          positive={extendedKpis.expectancy > 0}
-          icon={<Scale size={16} />}
-        />
-        <StatBadge
-          label="Max drawdown"
-          value={currency.format(extendedKpis.maxDrawdown)}
-          sub="peak-to-trough"
-          positive={false}
-          icon={<TrendingDown size={16} />}
-        />
-        <StatBadge
-          label="Current streak"
-          value={streakLabel}
-          sub={`Best: ${extendedKpis.maxWinStreak}W · Worst: ${extendedKpis.maxLossStreak}L`}
-          positive={streakPositive}
-          icon={<Flame size={16} />}
-        />
-      </section>
+      {extendedKpis && (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatBadge
+            label="Profit factor"
+            value={extendedKpis.profitFactor >= 99 ? "∞" : extendedKpis.profitFactor.toFixed(2)}
+            sub="gross win / gross loss"
+            positive={extendedKpis.profitFactor >= 1.5}
+            neutral={extendedKpis.profitFactor >= 1 && extendedKpis.profitFactor < 1.5}
+            icon={<Zap size={16} />}
+          />
+          <StatBadge
+            label="Expectancy"
+            value={`${extendedKpis.expectancy >= 0 ? "+" : ""}${extendedKpis.expectancy.toFixed(2)}R`}
+            sub="avg R per trade"
+            positive={extendedKpis.expectancy > 0}
+            icon={<Scale size={16} />}
+          />
+          <StatBadge
+            label="Max drawdown"
+            value={currency.format(extendedKpis.maxDrawdown)}
+            sub="peak-to-trough"
+            positive={false}
+            icon={<TrendingDown size={16} />}
+          />
+          <StatBadge
+            label="Current streak"
+            value={streakLabel}
+            sub={`Best: ${extendedKpis.maxWinStreak}W · Worst: ${extendedKpis.maxLossStreak}L`}
+            positive={streakPositive}
+            icon={<Flame size={16} />}
+          />
+        </section>
+      )}
 
       {/* Row 3: Equity curve + Sector */}
       <section className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
@@ -124,7 +128,10 @@ export function DashboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <CalendarHeatmap data={dailyCalendar} />
+          {dailyCalendar.length > 0
+            ? <CalendarHeatmap data={dailyCalendar} />
+            : <p className="text-sm text-muted-foreground py-4 text-center">No trade data to display. Add trades to see your P&L calendar.</p>
+          }
         </CardContent>
       </Card>
 

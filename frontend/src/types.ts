@@ -73,12 +73,12 @@ export interface Dashboard {
     averageRMultiple: number;
     totalTrades: number;
   };
-  extendedKpis: ExtendedKpis;
+  extendedKpis?: ExtendedKpis;
   equityCurve: ChartPoint[];
   sectorAllocation: ChartPoint[];
   weeklyPerformance: ChartPoint[];
   monthlyPerformance: ChartPoint[];
-  dailyCalendar: DailyPnl[];
+  dailyCalendar?: DailyPnl[];
   topWinners: TradePerformanceRow[];
   topLosers: TradePerformanceRow[];
   strategies: StrategyMetric[];
