@@ -22,6 +22,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_32%),linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] dark:bg-none dark:bg-background">
+      {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-border bg-white/90 p-5 backdrop-blur xl:block dark:bg-card/90">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/25">
@@ -52,12 +53,18 @@ export function AppShell() {
           </Button>
         </div>
       </aside>
-      <main className="xl:pl-72">
+
+      <main className="pb-20 xl:pb-0 xl:pl-72">
         <header className="sticky top-0 z-10 border-b border-border bg-white/80 px-4 py-3 backdrop-blur dark:bg-card/80 md:px-8">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Professional trading analytics</p>
-              <h1 className="text-xl font-black tracking-tight md:text-2xl">Journal command center</h1>
+            <div className="flex items-center gap-3">
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-600 text-white xl:hidden">
+                <TrendingUp size={16} />
+              </div>
+              <div>
+                <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 sm:block">Professional trading analytics</p>
+                <h1 className="text-lg font-black tracking-tight md:text-2xl">Journal command center</h1>
+              </div>
             </div>
             <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold md:flex">
               <BarChart3 size={16} className="text-emerald-600" /> Live edge tracking
@@ -68,6 +75,29 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+
+      {/* Mobile bottom navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-white/95 backdrop-blur dark:bg-card/95 xl:hidden">
+        <div className="flex items-center justify-around px-1 py-2">
+          {nav.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => cn(
+                "flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10px] font-semibold text-slate-500 transition dark:text-slate-400",
+                isActive && "text-emerald-700 dark:text-emerald-400"
+              )}
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon size={20} className={cn(isActive && "stroke-emerald-600 dark:stroke-emerald-400")} />
+                  {item.label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
