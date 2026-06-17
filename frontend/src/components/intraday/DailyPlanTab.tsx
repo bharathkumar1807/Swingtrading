@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddStockPlanModal } from "@/components/intraday/AddStockPlanModal";
 import { AddLegModal } from "@/components/intraday/AddLegModal";
 import { dailyPlanApi } from "@/services/dailyPlanApi";
+import { intradayApi } from "@/services/intradayApi";
 import { currency } from "@/lib/utils";
 import type { DailyStockPlan, DailyPlanLeg, WeeklyPlanStats } from "@/types";
 
@@ -236,18 +237,34 @@ function StockCard({
 
 // ── Daily Log ──────────────────────────────────────────────────────────────
 
-function DailyLog() {
-  const [date, setDate] = useState(todayIso());
+function DailyLog({ filterDate, filterSymbols }: {
+  filterDate?: string;
+  filterSymbols?: string[];
+}) {
+  const [date, setDate] = useState(filterDate ?? todayIso());
   const [plans, setPlans] = useState<DailyStockPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [addingSymbol, setAddingSymbol] = useState<string | null>(null);
+  const [sessionSymbols, setSessionSymbols] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<DailyStockPlan | undefined>();
+
+  useEffect(() => { if (filterDate) setDate(filterDate); }, [filterDate]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try { setPlans(await dailyPlanApi.getByDate(date)); }
     finally { setLoading(false); }
+  }, [date]);
+
+  // Load session symbols whenever date changes so we can show "add from session" chips
+  useEffect(() => {
+    setSessionSymbols([]);
+    intradayApi.getSessions().then((sessions) => {
+      const match = sessions.find((s) => s.sessionDate.startsWith(date));
+      if (match) setSessionSymbols(match.symbols);
+    }).catch(() => {});
   }, [date]);
 
   useEffect(() => { void load(); }, [load]);
@@ -259,15 +276,32 @@ function DailyLog() {
   async function importFromSession() {
     setImporting(true);
     try {
-      const imported = await dailyPlanApi.importFromSession(date);
-      if (imported.length === 0) {
-        alert("No new stocks to import. Either no session exists for this date, or all symbols are already logged.");
+      const synced = await dailyPlanApi.importFromSession(date);
+      if (synced.length === 0) {
+        alert("None of your planned stocks had executions in the session for this date.");
       } else {
-        setPlans((prev) => [...prev, ...imported]);
+        setPlans((prev) => prev.map((p) => synced.find((s) => s.id === p.id) ?? p));
       }
     } catch {
       alert("No session found for this date. Upload a Robinhood statement first.");
     } finally { setImporting(false); }
+  }
+
+  async function addFromSession(symbol: string) {
+    setAddingSymbol(symbol);
+    try {
+      const result = await dailyPlanApi.importFromSession(date, symbol);
+      if (result.length > 0) {
+        setPlans((prev) => {
+          const updated = result[0];
+          return prev.some((p) => p.id === updated.id)
+            ? prev.map((p) => p.id === updated.id ? updated : p)
+            : [...prev, updated];
+        });
+      }
+    } catch {
+      alert("Could not import. Make sure a session exists for this date.");
+    } finally { setAddingSymbol(null); }
   }
 
   async function deletePlan(id: string) {
@@ -276,22 +310,30 @@ function DailyLog() {
     setPlans((prev) => prev.filter((p) => p.id !== id));
   }
 
-  const dayPnl = plans.reduce((s, p) => s + p.pnl, 0);
-  const traded = plans.filter((p) => p.outcome !== "Skipped");
+  const upperFilterSymbols = filterSymbols && filterSymbols.length > 0
+    ? filterSymbols.map((s) => s.toUpperCase()) : null;
+  const displayedPlans = upperFilterSymbols
+    ? plans.filter((p) => upperFilterSymbols.includes(p.symbol.toUpperCase()))
+    : plans;
+
+  const dayPnl = displayedPlans.reduce((s, p) => s + p.pnl, 0);
+  const traded = displayedPlans.filter((p) => p.outcome !== "Skipped");
   const wins = traded.filter((p) => p.outcome === "Win").length;
-  const ruleBreaks = plans.filter((p) => p.resultVsPlan === "BrokeRule").length;
+  const ruleBreaks = displayedPlans.filter((p) => p.resultVsPlan === "BrokeRule").length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-semibold text-muted-foreground">Date</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-        </div>
+        {!filterDate && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold text-muted-foreground">Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+          </div>
+        )}
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={importFromSession} disabled={importing || plans.length >= 4}>
-            <Download size={14} /> {importing ? "Importing..." : "From session"}
+            <Download size={14} /> {importing ? "Syncing..." : "Sync from session"}
           </Button>
           <Button size="sm" onClick={() => { setEditing(undefined); setModalOpen(true); }} disabled={plans.length >= 4}>
             <Plus size={14} /> Add manually {plans.length >= 4 && "(max 4)"}
@@ -299,11 +341,11 @@ function DailyLog() {
         </div>
       </div>
 
-      {!loading && plans.length > 0 && (
+      {!loading && displayedPlans.length > 0 && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: "Day P&L", value: currency.format(dayPnl), color: dayPnl >= 0 ? "text-emerald-600" : "text-rose-600" },
-            { label: "Stocks", value: `${plans.length} / 4`, color: "" },
+            { label: "Stocks", value: `${displayedPlans.length} / 4`, color: "" },
             { label: "Win rate", value: traded.length > 0 ? `${Math.round((wins / traded.length) * 100)}%` : "–", color: "" },
             { label: "Rule breaks", value: String(ruleBreaks), color: ruleBreaks > 0 ? "text-rose-600" : "text-muted-foreground" },
           ].map(({ label, value, color }) => (
@@ -317,24 +359,59 @@ function DailyLog() {
 
       {loading && <p className="py-10 text-center text-sm text-muted-foreground">Loading...</p>}
 
-      {!loading && plans.length === 0 && (
+      {/* Session symbol picker — stocks traded today that aren't in the plan yet */}
+      {!loading && !filterDate && plans.length < 4 && sessionSymbols.length > 0 && (() => {
+        const available = sessionSymbols.filter(
+          (sym) => !plans.some((p) => p.symbol.toUpperCase() === sym.toUpperCase())
+        );
+        if (available.length === 0) return null;
+        return (
+          <Card className="border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20">
+            <CardContent className="pt-4 pb-4">
+              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                Session stocks for this date — click to add to your plan:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {available.map((sym) => (
+                  <button
+                    key={sym}
+                    onClick={() => addFromSession(sym)}
+                    disabled={addingSymbol === sym || plans.length >= 4}
+                    className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-300"
+                  >
+                    {addingSymbol === sym ? "Adding…" : `+ ${sym}`}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {!loading && displayedPlans.length === 0 && (
         <Card><CardContent className="py-14 text-center">
-          <p className="font-semibold text-muted-foreground">No stocks logged for this day</p>
-          <p className="mt-1 text-xs text-muted-foreground">Import from a session or log manually. Max 4 stocks per day.</p>
-          <div className="mt-4 flex justify-center gap-2">
-            <Button variant="outline" size="sm" onClick={importFromSession} disabled={importing}>
-              <Download size={14} /> {importing ? "Importing..." : "From session"}
-            </Button>
-            <Button size="sm" onClick={() => { setEditing(undefined); setModalOpen(true); }}>
-              <Plus size={14} /> Add manually
-            </Button>
-          </div>
+          <p className="font-semibold text-muted-foreground">
+            {upperFilterSymbols ? "No matching stocks logged for this day" : "No stocks logged for this day"}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {sessionSymbols.length > 0 ? "Click a stock above to add it from today's session, or add manually." : "Import from a session or log manually. Max 4 stocks per day."}
+          </p>
+          {!filterDate && sessionSymbols.length === 0 && (
+            <div className="mt-4 flex justify-center gap-2">
+              <Button variant="outline" size="sm" onClick={importFromSession} disabled={importing}>
+                <Download size={14} /> {importing ? "Syncing..." : "Sync from session"}
+              </Button>
+              <Button size="sm" onClick={() => { setEditing(undefined); setModalOpen(true); }}>
+                <Plus size={14} /> Add manually
+              </Button>
+            </div>
+          )}
         </CardContent></Card>
       )}
 
-      {!loading && plans.length > 0 && (
+      {!loading && displayedPlans.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2">
-          {plans.map((plan) => (
+          {displayedPlans.map((plan) => (
             <StockCard
               key={plan.id}
               plan={plan}
@@ -514,7 +591,10 @@ function SubTabBtn({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-export function DailyPlanTab() {
+export function DailyPlanTab({ filterDate, filterSymbols }: {
+  filterDate?: string;
+  filterSymbols?: string[];
+} = {}) {
   const [sub, setSub] = useState<SubTab>("daily");
   return (
     <div className="space-y-5">
@@ -522,7 +602,9 @@ export function DailyPlanTab() {
         <SubTabBtn active={sub === "daily"} onClick={() => setSub("daily")}>Daily Log</SubTabBtn>
         <SubTabBtn active={sub === "weekly"} onClick={() => setSub("weekly")}>Weekly Review</SubTabBtn>
       </div>
-      {sub === "daily" ? <DailyLog /> : <WeeklyReview />}
+      {sub === "daily"
+        ? <DailyLog filterDate={filterDate} filterSymbols={filterSymbols} />
+        : <WeeklyReview />}
     </div>
   );
 }

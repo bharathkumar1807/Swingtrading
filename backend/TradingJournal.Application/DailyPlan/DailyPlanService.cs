@@ -135,41 +135,58 @@ public sealed class DailyPlanService(IApplicationDbContext db, IUserContext user
         if (session is null)
             throw new KeyNotFoundException($"No session found for {req.Date}.");
 
+        // Load all pre-existing plans for this date — these are the user's chosen stocks.
+        // Executions for symbols NOT in this list are ignored.
+        var existingPlans = await db.DailyStockPlans
+            .Include(p => p.Legs)
+            .Where(p => p.UserId == user.UserId && p.Date == req.Date)
+            .ToListAsync(ct);
+
         var executions = session.Executions
             .Where(e => req.Symbol == null || e.Symbol.Equals(req.Symbol, StringComparison.OrdinalIgnoreCase))
             .GroupBy(e => e.Symbol)
             .ToList();
 
-        var created = new List<DailyStockPlanDto>();
+        var synced = new List<DailyStockPlanDto>();
 
         foreach (var symbolGroup in executions)
         {
             var symbol = symbolGroup.Key;
 
-            // Skip if a plan already exists for this symbol on this date
-            var existing = await db.DailyStockPlans
-                .AnyAsync(p => p.UserId == user.UserId && p.Date == req.Date && p.Symbol == symbol, ct);
-            if (existing) continue;
+            var plan = existingPlans.FirstOrDefault(p =>
+                p.Symbol.Equals(symbol, StringComparison.OrdinalIgnoreCase));
 
-            var plan = new DailyStockPlan
+            if (plan is null)
             {
-                UserId = user.UserId,
-                Date = req.Date,
-                Symbol = symbol,
-                MaxLossAllowed = 50,
-                MarketDirection = MarketDirection.TrendingUp,
-                SectorBehavior = SectorBehavior.Strong,
-                Outcome = DailyPlanOutcome.Win,
-                ResultVsPlan = ResultVsPlan.FollowedPlan,
-            };
+                // Bulk sync (no symbol specified): only touch pre-entered plan stocks.
+                if (req.Symbol is null) continue;
 
-            // Build legs from executions, ordered by time
+                // Single-symbol request (e.g. "Add to Plan" from session view):
+                // create the plan entry on the fly so the user can add a stock retroactively.
+                plan = new DailyStockPlan
+                {
+                    UserId = user.UserId,
+                    Date = req.Date,
+                    Symbol = symbol,
+                    MaxLossAllowed = 50,
+                    MarketDirection = MarketDirection.TrendingUp,
+                    SectorBehavior = SectorBehavior.Strong,
+                    Outcome = DailyPlanOutcome.Win,
+                    ResultVsPlan = ResultVsPlan.FollowedPlan,
+                };
+                db.DailyStockPlans.Add(plan);
+            }
+            else
+            {
+                // Replace legs with the session data (clean sync).
+                plan.Legs.Clear();
+            }
+
             var orderedExecs = symbolGroup.OrderBy(e => e.TradeDate).ToList();
             decimal runningQty = 0;
 
-            for (var i = 0; i < orderedExecs.Count; i++)
+            foreach (var exec in orderedExecs)
             {
-                var exec = orderedExecs[i];
                 var isBuy = exec.Side == ExecutionSide.Buy;
 
                 LegType legType;
@@ -196,17 +213,15 @@ public sealed class DailyPlanService(IApplicationDbContext db, IUserContext user
 
             plan.RecalculateFromLegs();
 
-            // Auto-set outcome from P&L
             plan.Outcome = plan.Pnl > 0 ? DailyPlanOutcome.Win
                 : plan.Pnl < 0 ? DailyPlanOutcome.Loss
                 : DailyPlanOutcome.Breakeven;
 
-            db.DailyStockPlans.Add(plan);
-            created.Add(Map(plan));
+            synced.Add(Map(plan));
         }
 
         await db.SaveChangesAsync(ct);
-        return created;
+        return synced;
     }
 
     // ── Weekly stats ──────────────────────────────────────────────────────

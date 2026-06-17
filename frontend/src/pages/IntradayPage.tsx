@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileUp, Trash2, Zap, CalendarDays, BarChart2 } from "lucide-react";
+import { FileUp, Trash2, Zap, CalendarDays, BarChart2, Filter, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { PerformanceStrip } from "@/components/intraday/PerformanceStrip";
 import { DailyPlanTab } from "@/components/intraday/DailyPlanTab";
 import { PlanAnalyticsTab } from "@/components/intraday/PlanAnalyticsTab";
 import { intradayApi } from "@/services/intradayApi";
+import { dailyPlanApi } from "@/services/dailyPlanApi";
 import { currency } from "@/lib/utils";
 import type { IntradaySessionSummary } from "@/types";
 
@@ -36,6 +37,93 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
+// ── Global filter bar ──────────────────────────────────────────────────────
+
+function IntradayFilterBar({
+  filterDate, setFilterDate,
+  filterSymbols, setFilterSymbols,
+}: {
+  filterDate: string;
+  setFilterDate: (d: string) => void;
+  filterSymbols: string[];
+  setFilterSymbols: (s: string[]) => void;
+}) {
+  const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isActive = !!filterDate || filterSymbols.length > 0;
+
+  function addSymbol(raw: string) {
+    const sym = raw.trim().toUpperCase();
+    if (!sym || filterSymbols.includes(sym) || filterSymbols.length >= 4) return;
+    setFilterSymbols([...filterSymbols, sym]);
+    setInput("");
+  }
+
+  function removeSymbol(sym: string) {
+    setFilterSymbols(filterSymbols.filter((s) => s !== sym));
+  }
+
+  function clearAll() {
+    setFilterDate("");
+    setFilterSymbols([]);
+    setInput("");
+  }
+
+  return (
+    <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 transition-colors ${isActive ? "border-blue-400 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-950/20" : "border-border bg-muted/40"}`}>
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        <Filter size={13} />
+        <span>Focus</span>
+      </div>
+
+      {/* Date picker */}
+      <input
+        type="date"
+        value={filterDate}
+        onChange={(e) => setFilterDate(e.target.value)}
+        className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+
+      {/* Symbol chips */}
+      {filterSymbols.map((sym) => (
+        <span
+          key={sym}
+          className="flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-800 dark:bg-blue-900/50 dark:text-blue-300"
+        >
+          {sym}
+          <button onClick={() => removeSymbol(sym)} className="hover:text-rose-500 transition">
+            <X size={11} />
+          </button>
+        </span>
+      ))}
+
+      {/* Symbol input */}
+      {filterSymbols.length < 4 && (
+        <input
+          ref={inputRef}
+          type="text"
+          value={input}
+          placeholder="+ Add symbol (Enter)"
+          onChange={(e) => setInput(e.target.value.toUpperCase())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addSymbol(input); }
+          }}
+          className="w-36 rounded-md border border-input bg-background px-2.5 py-1 text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+      )}
+
+      {isActive && (
+        <button
+          onClick={clearAll}
+          className="ml-auto text-xs text-muted-foreground hover:text-rose-500 transition font-medium"
+        >
+          Clear filter
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function IntradayPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<MainTab>("sessions");
@@ -43,6 +131,18 @@ export function IntradayPage() {
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [period, setPeriod] = useState<Period>("30D");
+
+  // Global focus filter
+  const [filterDate, setFilterDate] = useState("");
+  const [filterSymbols, setFilterSymbols] = useState<string[]>([]);
+
+  // When a date is selected, auto-populate symbols from the daily plan for that date
+  useEffect(() => {
+    if (!filterDate) { setFilterSymbols([]); return; }
+    dailyPlanApi.getByDate(filterDate).then((plans) => {
+      if (plans.length > 0) setFilterSymbols(plans.map((p) => p.symbol));
+    }).catch(() => {});
+  }, [filterDate]);
 
   async function load() {
     setLoading(true);
@@ -61,7 +161,16 @@ export function IntradayPage() {
     void load();
   }
 
-  const filtered = filterByPeriod(sessions, period);
+  // Apply focus filter to sessions list
+  const focusFiltered = sessions.filter((s) => {
+    if (filterDate && !s.sessionDate.startsWith(filterDate)) return false;
+    if (filterSymbols.length > 0) {
+      const upper = filterSymbols.map((x) => x.toUpperCase());
+      if (!upper.some((sym) => s.symbols.map((x) => x.toUpperCase()).includes(sym))) return false;
+    }
+    return true;
+  });
+  const filtered = filterByPeriod(focusFiltered, period);
 
   return (
     <div className="space-y-5">
@@ -77,6 +186,14 @@ export function IntradayPage() {
         )}
       </div>
 
+      {/* Focus filter */}
+      <IntradayFilterBar
+        filterDate={filterDate}
+        setFilterDate={setFilterDate}
+        filterSymbols={filterSymbols}
+        setFilterSymbols={setFilterSymbols}
+      />
+
       {/* Main tabs */}
       <div className="flex items-center gap-1 w-fit rounded-lg bg-muted p-1">
         <TabBtn active={tab === "sessions"} onClick={() => setTab("sessions")}>
@@ -90,8 +207,18 @@ export function IntradayPage() {
         </TabBtn>
       </div>
 
-      {tab === "daily-plan" && <DailyPlanTab />}
-      {tab === "analytics" && <PlanAnalyticsTab />}
+      {tab === "daily-plan" && (
+        <DailyPlanTab
+          filterDate={filterDate || undefined}
+          filterSymbols={filterSymbols.length > 0 ? filterSymbols : undefined}
+        />
+      )}
+      {tab === "analytics" && (
+        <PlanAnalyticsTab
+          filterDate={filterDate || undefined}
+          filterSymbols={filterSymbols.length > 0 ? filterSymbols : undefined}
+        />
+      )}
 
       {tab === "sessions" && (
         <>

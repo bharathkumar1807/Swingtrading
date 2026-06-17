@@ -8,6 +8,7 @@ import type { DailyStockPlan } from "@/types";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
+type ViewMode = "range" | "date";
 type Range = "7D" | "30D" | "3M";
 const RANGES: Range[] = ["7D", "30D", "3M"];
 const RANGE_DAYS: Record<Range, number> = { "7D": 7, "30D": 30, "3M": 90 };
@@ -483,19 +484,40 @@ function DayPnlChart({ data }: { data: { label: string; pnl: number }[] }) {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function PlanAnalyticsTab() {
+export function PlanAnalyticsTab({
+  filterDate,
+  filterSymbols,
+}: {
+  filterDate?: string;
+  filterSymbols?: string[];
+} = {}) {
+  const externalFilter = !!filterDate || (filterSymbols && filterSymbols.length > 0);
+  const [viewMode, setViewMode] = useState<ViewMode>(filterDate ? "date" : "range");
   const [range, setRange] = useState<Range>("30D");
+  const [selectedDate, setSelectedDate] = useState(filterDate ?? todayIso());
   const [plans, setPlans] = useState<DailyStockPlan[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (filterDate) { setViewMode("date"); setSelectedDate(filterDate); }
+  }, [filterDate]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setPlans(await dailyPlanApi.getRange(daysAgo(RANGE_DAYS[range]), todayIso()));
+      let fetched: DailyStockPlan[] = viewMode === "date"
+        ? await dailyPlanApi.getByDate(selectedDate)
+        : await dailyPlanApi.getRange(daysAgo(RANGE_DAYS[range]), todayIso());
+
+      if (filterSymbols && filterSymbols.length > 0) {
+        const upper = filterSymbols.map((s) => s.toUpperCase());
+        fetched = fetched.filter((p) => upper.includes(p.symbol.toUpperCase()));
+      }
+      setPlans(fetched);
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [viewMode, range, selectedDate, filterSymbols]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -503,16 +525,41 @@ export function PlanAnalyticsTab() {
 
   const isEmpty = !loading && plans.length === 0;
 
+  const descLine = loading ? "Loading…"
+    : viewMode === "date"
+    ? `${plans.length} stock${plans.length !== 1 ? "s" : ""} logged on ${fmtDate(selectedDate).label}`
+    : `${plans.length} stock plans across ${stats.dates.length} trading days`;
+
   return (
     <div className="space-y-5">
       {/* Header row */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            {loading ? "Loading…" : `${plans.length} stock plans across ${stats.dates.length} trading days`}
-          </p>
-        </div>
-        <RangePicker range={range} onChange={setRange} />
+        <p className="text-sm text-muted-foreground">{descLine}</p>
+
+        {/* Only show internal controls when no external filter is driving the view */}
+        {!externalFilter && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 rounded-lg bg-muted p-1 w-fit">
+              {(["range", "date"] as ViewMode[]).map((m) => (
+                <button
+                  key={m}
+                  className={`rounded-md px-3 py-1 text-xs font-semibold transition ${viewMode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setViewMode(m)}
+                >{m === "range" ? "Range" : "Single Day"}</button>
+              ))}
+            </div>
+            {viewMode === "range"
+              ? <RangePicker range={range} onChange={setRange} />
+              : (
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="rounded-md border border-input bg-background px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
+          </div>
+        )}
       </div>
 
       {/* Empty state */}
@@ -520,7 +567,9 @@ export function PlanAnalyticsTab() {
         <Card>
           <CardContent className="py-16 text-center">
             <BarChart2 size={36} className="mx-auto mb-3 text-muted-foreground/30" />
-            <p className="font-semibold text-muted-foreground">No plan data for this period</p>
+            <p className="font-semibold text-muted-foreground">
+              {viewMode === "date" ? `No stocks logged for ${fmtDate(selectedDate).label}` : "No plan data for this period"}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">Log stocks in the Daily Plan tab to start seeing analytics.</p>
           </CardContent>
         </Card>

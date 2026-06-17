@@ -36,7 +36,8 @@ public static class DependencyInjection
                 return;
             }
 
-            options.UseSqlServer(configuration.GetConnectionString("SqlServerConnection"));
+            options.UseSqlServer(configuration.GetConnectionString("SqlServerConnection"),
+                sql => sql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null));
         });
 
         services.AddIdentityCore<ApplicationUser>(options =>
