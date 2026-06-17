@@ -222,6 +222,11 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                         CONSTRAINT "FK_DailyPlanLegs_DailyStockPlans" FOREIGN KEY ("DailyStockPlanId") REFERENCES "DailyStockPlans" ("Id") ON DELETE CASCADE
                     );
                     CREATE INDEX IF NOT EXISTS "IX_DailyPlanLegs_DailyStockPlanId" ON "DailyPlanLegs" ("DailyStockPlanId");
+
+                    ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "IsActive" boolean NOT NULL DEFAULT true;
+                    ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "IsApproved" boolean NOT NULL DEFAULT true;
+                    ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "LastActiveAt" timestamp with time zone;
+                    ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "JoinedAt" timestamp with time zone NOT NULL DEFAULT now();
                     """);
             }
             else
