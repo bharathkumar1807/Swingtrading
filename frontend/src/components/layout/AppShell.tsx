@@ -74,7 +74,7 @@ export function AppShell() {
                 <TrendingUp size={16} />
               </div>
               <div>
-                <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 sm:block">Professional trading analytics</p>
+                <p className="hidden text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 sm:block">Welcome back, {user?.fullName?.split(" ")[0] ?? "Trader"}</p>
                 <h1 className="text-lg font-black tracking-tight md:text-2xl">Journal command center</h1>
               </div>
             </div>

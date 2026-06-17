@@ -11,9 +11,9 @@ export function LoginPage() {
   const user = useAppSelector((state) => state.auth.user);
   const { loading, error } = useAppSelector((state) => state.auth);
   const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("trader@example.com");
-  const [password, setPassword] = useState("Password123");
-  const [fullName, setFullName] = useState("Professional Trader");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
 
   if (user) return <Navigate to="/" replace />;
 

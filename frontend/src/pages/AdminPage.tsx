@@ -29,6 +29,7 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [summary, setSummary] = useState<UserSummary | null>(null);
   const [trades, setTrades] = useState<AdminTrade[] | null>(null);
+  const [tradesError, setTradesError] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingTrades, setLoadingTrades] = useState(false);
 
@@ -44,11 +45,15 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
   }, [userId]);
 
   useEffect(() => {
-    if (tab === "trades" && trades === null) {
+    if (tab === "trades" && trades === null && !tradesError) {
       setLoadingTrades(true);
-      adminApi.getUserTrades(userId).then(setTrades).finally(() => setLoadingTrades(false));
+      setTradesError(null);
+      adminApi.getUserTrades(userId)
+        .then(setTrades)
+        .catch(() => setTradesError("Failed to load trades. Please try again."))
+        .finally(() => setLoadingTrades(false));
     }
-  }, [tab, trades, userId]);
+  }, [tab, trades, tradesError, userId]);
 
   async function handleChangePassword() {
     if (!newPassword.trim()) return;
@@ -157,10 +162,21 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
               {loadingTrades && (
                 <p className="p-5 text-center text-sm text-muted-foreground">Loading trades…</p>
               )}
-              {trades && trades.length === 0 && (
+              {tradesError && !loadingTrades && (
+                <div className="p-5 text-center space-y-2">
+                  <p className="text-sm text-rose-500">{tradesError}</p>
+                  <button
+                    onClick={() => { setTradesError(null); }}
+                    className="text-xs font-semibold text-violet-600 hover:underline"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {!tradesError && trades && trades.length === 0 && (
                 <p className="p-5 text-center text-sm text-muted-foreground">No trades yet.</p>
               )}
-              {trades && trades.length > 0 && (
+              {!tradesError && trades && trades.length > 0 && (
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
