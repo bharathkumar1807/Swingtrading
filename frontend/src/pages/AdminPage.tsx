@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Users, Activity, TrendingUp, BarChart3, Star, X, ChevronRight, ShieldAlert, UserCheck, Clock, KeyRound, ListOrdered, LayoutDashboard, Eye, EyeOff, Pencil, Check, ChevronDown, ChevronUp, Tag, AlertCircle } from "lucide-react";
+import { Users, Activity, TrendingUp, BarChart3, Star, X, ChevronRight, ShieldAlert, UserCheck, Clock, KeyRound, ListOrdered, LayoutDashboard, Eye, EyeOff, Pencil, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { adminApi, type AdminUser, type AdminTrade, type PlatformStats, type UserSummary } from "@/services/adminApi";
+import { adminApi, type AdminUser, type AdminIntradaySession, type PlatformStats, type UserSummary } from "@/services/adminApi";
 import { currency } from "@/lib/utils";
 
 function StatCard({ icon: Icon, label, value, sub, color }: { icon: React.ElementType; label: string; value: string | number; sub?: string; color: string }) {
@@ -23,13 +23,11 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: React.Elemen
   );
 }
 
-type DrawerTab = "overview" | "trades" | "password";
+type DrawerTab = "overview" | "intraday" | "password";
 
-function TradeRow({ t }: { t: AdminTrade }) {
+function IntradaySessionRow({ s }: { s: AdminIntradaySession }) {
   const [expanded, setExpanded] = useState(false);
-  const isWin = t.outcome === "Win";
-  const isLoss = t.outcome === "Loss";
-  const isLong = t.positionType === "Long";
+  const date = new Date(s.sessionDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <>
@@ -38,76 +36,62 @@ function TradeRow({ t }: { t: AdminTrade }) {
         onClick={() => setExpanded((v) => !v)}
       >
         <td className="px-3 py-2.5">
-          <div className="flex items-center gap-1.5">
-            <span className="font-bold">{t.symbol}</span>
-            <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${isLong ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400"}`}>
-              {t.positionType}
-            </span>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{t.sector || "—"}</p>
-        </td>
-        <td className="px-3 py-2.5 text-xs text-muted-foreground">
-          <div>{new Date(t.entryDate).toLocaleDateString()}</div>
-          <div>{t.exitDate ? new Date(t.exitDate).toLocaleDateString() : <span className="italic">Open</span>}</div>
+          <div className="font-semibold text-xs">{date}</div>
+          <div className="text-[10px] text-muted-foreground">{s.broker}</div>
         </td>
         <td className="px-3 py-2.5">
-          <span className={`font-bold text-sm ${t.pnl >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-            {currency.format(t.pnl)}
+          <span className={`font-bold text-sm ${s.totalPnl >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+            {currency.format(s.totalPnl)}
           </span>
         </td>
         <td className="px-3 py-2.5">
-          <span className={`font-mono text-xs font-bold ${t.rMultiple >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-            {t.rMultiple.toFixed(2)}R
-          </span>
-        </td>
-        <td className="px-3 py-2.5">
-          <div className="flex items-center gap-1">
-            {"★★★★★".split("").map((_, i) => (
-              <span key={i} className={`text-[10px] ${i < t.confidenceScore ? "text-amber-400" : "text-muted-foreground/30"}`}>★</span>
-            ))}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-emerald-600 font-bold">{s.winCount}W</span>
+            <span className="text-rose-500 font-bold">{s.lossCount}L</span>
+            {s.breakevenCount > 0 && <span className="text-muted-foreground font-bold">{s.breakevenCount}B</span>}
           </div>
         </td>
-        <td className="px-3 py-2.5">
-          <Badge tone={isWin ? "green" : isLoss ? "red" : "slate"}>{t.outcome}</Badge>
-        </td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">{s.totalExecutions}</td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">{s.trades.length}</td>
         <td className="px-3 py-2.5 text-muted-foreground">
           {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
         </td>
       </tr>
-      {expanded && (
+      {expanded && s.trades.length > 0 && (
         <tr className="border-b border-border bg-muted/10">
-          <td colSpan={7} className="px-4 py-3">
-            <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-xs">
-              <Detail label="Strategy" value={t.strategy || "—"} />
-              <Detail label="Broker" value={t.broker || "—"} />
-              <Detail label="Entry Price" value={`$${t.entryPrice.toFixed(2)}`} />
-              <Detail label="Exit Price" value={t.exitPrice != null ? `$${t.exitPrice.toFixed(2)}` : "—"} />
-              <Detail label="Stop Loss" value={`$${t.stopLoss.toFixed(2)}`} />
-              <Detail label="Size" value={t.size.toString()} />
-              <Detail label="Risk $" value={currency.format(t.riskAmount)} />
-              <Detail label="Reward $" value={currency.format(t.rewardAmount)} />
-              <Detail label="Fees" value={t.fees > 0 ? currency.format(t.fees) : "—"} />
-              {t.slippage > 0 && <Detail label="Slippage" value={currency.format(t.slippage)} />}
-            </div>
-            {t.tags.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <Tag size={11} className="text-muted-foreground" />
-                {t.tags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">{tag}</span>
-                ))}
-              </div>
-            )}
-            {t.mistakes.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <AlertCircle size={11} className="text-rose-500" />
-                {t.mistakes.map((m) => (
-                  <span key={m} className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{m}</span>
-                ))}
-              </div>
-            )}
-            {t.notes && (
-              <p className="mt-2 text-xs text-muted-foreground italic border-l-2 border-border pl-2">{t.notes}</p>
-            )}
+          <td colSpan={6} className="px-4 py-3">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border">
+                  {["Symbol", "Qty", "Avg Buy", "Avg Sell", "P&L", "Outcome"].map((h) => (
+                    <th key={h} className="pb-1.5 text-left font-semibold text-muted-foreground">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {s.trades.map((t) => {
+                  const isWin = t.outcome === "Win";
+                  const isLoss = t.outcome === "Loss";
+                  return (
+                    <tr key={t.id} className="border-b border-border/50 last:border-0">
+                      <td className="py-1.5 font-bold">
+                        {t.symbol}
+                        {!t.isFullyClosed && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Open</span>}
+                      </td>
+                      <td className="py-1.5 font-mono">{t.matchedQty}</td>
+                      <td className="py-1.5 font-mono">${t.avgBuyPrice.toFixed(2)}</td>
+                      <td className="py-1.5 font-mono">{t.avgSellPrice > 0 ? `$${t.avgSellPrice.toFixed(2)}` : "—"}</td>
+                      <td className={`py-1.5 font-bold ${t.pnl >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+                        {currency.format(t.pnl)}
+                      </td>
+                      <td className="py-1.5">
+                        <Badge tone={isWin ? "green" : isLoss ? "red" : "slate"}>{t.outcome}</Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </td>
         </tr>
       )}
@@ -115,22 +99,13 @@ function TradeRow({ t }: { t: AdminTrade }) {
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span className="text-muted-foreground">{label}: </span>
-      <span className="font-semibold">{value}</span>
-    </div>
-  );
-}
-
 function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClose: () => void; onUserUpdated: (u: AdminUser) => void }) {
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [summary, setSummary] = useState<UserSummary | null>(null);
-  const [trades, setTrades] = useState<AdminTrade[] | null>(null);
-  const [tradesError, setTradesError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<AdminIntradaySession[] | null>(null);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
-  const [loadingTrades, setLoadingTrades] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
   // name edit state
   const [editingName, setEditingName] = useState(false);
@@ -152,15 +127,15 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
   }, [userId]);
 
   useEffect(() => {
-    if (tab === "trades" && trades === null && !tradesError) {
-      setLoadingTrades(true);
-      setTradesError(null);
-      adminApi.getUserTrades(userId)
-        .then(setTrades)
-        .catch(() => setTradesError("Failed to load trades. Please try again."))
-        .finally(() => setLoadingTrades(false));
+    if (tab === "intraday" && sessions === null && !sessionsError) {
+      setLoadingSessions(true);
+      setSessionsError(null);
+      adminApi.getUserIntradaySessions(userId)
+        .then(setSessions)
+        .catch(() => setSessionsError("Failed to load sessions. Please try again."))
+        .finally(() => setLoadingSessions(false));
     }
-  }, [tab, trades, tradesError, userId]);
+  }, [tab, sessions, sessionsError, userId]);
 
   async function handleSaveName() {
     if (!nameValue.trim() || nameValue.trim() === summary?.fullName) { setEditingName(false); return; }
@@ -192,7 +167,7 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
 
   const tabs = [
     { id: "overview" as DrawerTab, label: "Overview", icon: LayoutDashboard },
-    { id: "trades" as DrawerTab, label: `Trades${trades ? ` (${trades.length})` : ""}`, icon: ListOrdered },
+    { id: "intraday" as DrawerTab, label: `Intraday${sessions ? ` (${sessions.length})` : ""}`, icon: ListOrdered },
     { id: "password" as DrawerTab, label: "Password", icon: KeyRound },
   ];
 
@@ -274,9 +249,9 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      { label: "Total Trades", value: summary.totalTrades },
+                      { label: "Intraday Trades", value: summary.totalTrades },
                       { label: "Win Rate", value: `${summary.winRate}%` },
-                      { label: "Total Sessions", value: summary.totalSessions },
+                      { label: "Sessions", value: summary.totalSessions },
                       { label: "Most Traded", value: summary.mostTradedSymbol ?? "—" },
                     ].map(({ label, value }) => (
                       <div key={label} className="rounded-xl border border-border bg-muted/40 p-3">
@@ -289,8 +264,8 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">P&amp;L Summary</p>
                     {[
                       { label: "Total P&L", value: currency.format(summary.totalPnl), pos: summary.totalPnl >= 0 },
-                      { label: "Best Day", value: currency.format(summary.bestDay), pos: true },
-                      { label: "Worst Day", value: currency.format(summary.worstDay), pos: false },
+                      { label: "Best Session", value: currency.format(summary.bestDay), pos: true },
+                      { label: "Worst Session", value: currency.format(summary.worstDay), pos: false },
                     ].map(({ label, value, pos }) => (
                       <div key={label} className="flex justify-between text-sm">
                         <span className="text-muted-foreground">{label}</span>
@@ -303,37 +278,37 @@ function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClos
             </div>
           )}
 
-          {/* ── Trades ── */}
-          {tab === "trades" && (
+          {/* ── Intraday ── */}
+          {tab === "intraday" && (
             <div>
-              {loadingTrades && (
-                <p className="p-5 text-center text-sm text-muted-foreground">Loading trades…</p>
+              {loadingSessions && (
+                <p className="p-5 text-center text-sm text-muted-foreground">Loading sessions…</p>
               )}
-              {tradesError && !loadingTrades && (
+              {sessionsError && !loadingSessions && (
                 <div className="p-5 text-center space-y-2">
-                  <p className="text-sm text-rose-500">{tradesError}</p>
+                  <p className="text-sm text-rose-500">{sessionsError}</p>
                   <button
-                    onClick={() => { setTradesError(null); }}
+                    onClick={() => { setSessionsError(null); }}
                     className="text-xs font-semibold text-violet-600 hover:underline"
                   >
                     Retry
                   </button>
                 </div>
               )}
-              {!tradesError && trades && trades.length === 0 && (
-                <p className="p-5 text-center text-sm text-muted-foreground">No trades yet.</p>
+              {!sessionsError && sessions && sessions.length === 0 && (
+                <p className="p-5 text-center text-sm text-muted-foreground">No intraday sessions yet.</p>
               )}
-              {!tradesError && trades && trades.length > 0 && (
+              {!sessionsError && sessions && sessions.length > 0 && (
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border bg-muted/40 sticky top-0">
-                      {["Symbol / Sector", "Entry / Exit", "P&L", "R", "Confidence", "Outcome", ""].map((h) => (
+                      {["Date / Broker", "Total P&L", "W / L", "Executions", "Symbols", ""].map((h) => (
                         <th key={h} className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {trades.map((t) => <TradeRow key={t.id} t={t} />)}
+                    {sessions.map((s) => <IntradaySessionRow key={s.id} s={s} />)}
                   </tbody>
                 </table>
               )}

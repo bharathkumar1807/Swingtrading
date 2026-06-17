@@ -37,6 +37,10 @@ public sealed class AdminController(IAdminService adminService) : ControllerBase
     public async Task<ActionResult<List<AdminTradeDto>>> GetUserTrades(string userId, CancellationToken ct)
         => Ok(await adminService.GetUserTradesAsync(userId, ct));
 
+    [HttpGet("users/{userId}/intraday-sessions")]
+    public async Task<ActionResult<List<AdminIntradaySessionDto>>> GetUserIntradaySessions(string userId, CancellationToken ct)
+        => Ok(await adminService.GetUserIntradaySessionsAsync(userId, ct));
+
     [HttpPost("users/{userId}/change-password")]
     public async Task<IActionResult> ChangePassword(string userId, [FromBody] ChangePasswordRequest req, CancellationToken ct)
     {

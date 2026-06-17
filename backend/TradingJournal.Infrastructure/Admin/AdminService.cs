@@ -47,36 +47,29 @@ public sealed class AdminService(ApplicationDbContext db, UserManager<Applicatio
         var user = await userManager.FindByIdAsync(userId)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
-        var trades = await db.Trades
-            .Where(t => t.UserId == userId)
-            .Select(t => new { t.Pnl, t.EntryDate, t.Symbol })
+        var sessions = await db.IntradaySessions
+            .Include(s => s.IntradayTrades)
+            .Where(s => s.UserId == userId)
             .ToListAsync(ct);
 
-        var totalTrades = trades.Count;
-        var totalPnl = trades.Sum(t => t.Pnl);
-        var wins = trades.Count(t => t.Pnl > 0);
+        var allTrades = sessions.SelectMany(s => s.IntradayTrades).ToList();
+        var totalTrades = allTrades.Count;
+        var totalPnl = sessions.Sum(s => s.TotalPnl);
+        var wins = sessions.Sum(s => s.WinCount);
         var winRate = totalTrades > 0 ? Math.Round((double)wins / totalTrades * 100, 1) : 0;
+        var bestSession = sessions.Count > 0 ? sessions.Max(s => s.TotalPnl) : 0m;
+        var worstSession = sessions.Count > 0 ? sessions.Min(s => s.TotalPnl) : 0m;
 
-        var byDay = trades
-            .GroupBy(t => t.EntryDate.Date)
-            .Select(g => g.Sum(t => t.Pnl))
-            .ToList();
-
-        var bestDay = byDay.Count > 0 ? byDay.Max() : 0m;
-        var worstDay = byDay.Count > 0 ? byDay.Min() : 0m;
-
-        var mostTradedSymbol = trades
+        var mostTradedSymbol = allTrades
             .GroupBy(t => t.Symbol)
             .OrderByDescending(g => g.Count())
             .Select(g => g.Key)
             .FirstOrDefault();
 
-        var totalSessions = await db.IntradaySessions.CountAsync(s => s.UserId == userId, ct);
-
         return new UserSummaryDto(
             user.Id, user.FullName, user.Email ?? string.Empty,
-            totalTrades, totalPnl, winRate, bestDay, worstDay,
-            totalSessions, mostTradedSymbol);
+            totalTrades, totalPnl, winRate, bestSession, worstSession,
+            sessions.Count, mostTradedSymbol);
     }
 
     public async Task<AdminUserDto> ToggleUserStatusAsync(string userId, CancellationToken ct)
@@ -119,6 +112,39 @@ public sealed class AdminService(ApplicationDbContext db, UserManager<Applicatio
             t.EntryDate, t.ExitDate, t.EntryPrice, t.ExitPrice,
             t.StopLoss, t.Size, t.Fees, t.Slippage,
             t.ConfidenceScore, t.Notes, t.Tags, t.Mistakes)).ToList();
+    }
+
+    public async Task<List<AdminIntradaySessionDto>> GetUserIntradaySessionsAsync(string userId, CancellationToken ct)
+    {
+        _ = await userManager.FindByIdAsync(userId)
+            ?? throw new KeyNotFoundException($"User {userId} not found.");
+
+        var sessions = await db.IntradaySessions
+            .Include(s => s.IntradayTrades)
+            .Where(s => s.UserId == userId)
+            .OrderByDescending(s => s.SessionDate)
+            .ToListAsync(ct);
+
+        return sessions.Select(s => new AdminIntradaySessionDto(
+            s.Id,
+            s.SessionDate,
+            s.Broker,
+            s.TotalPnl,
+            s.WinCount,
+            s.LossCount,
+            s.BreakevenCount,
+            s.TotalExecutions,
+            s.IntradayTrades.Select(t => new AdminIntradayTradeDto(
+                t.Id,
+                t.Symbol,
+                t.CompanyName,
+                t.MatchedQty,
+                t.AvgBuyPrice,
+                t.AvgSellPrice,
+                t.Pnl,
+                t.Outcome.ToString(),
+                t.IsFullyClosed)).ToList()
+        )).ToList();
     }
 
     public async Task ChangePasswordAsync(string userId, string newPassword, CancellationToken ct)

@@ -34,6 +34,30 @@ export interface UserSummary {
   mostTradedSymbol: string | null;
 }
 
+export interface AdminIntradayTrade {
+  id: string;
+  symbol: string;
+  companyName: string;
+  matchedQty: number;
+  avgBuyPrice: number;
+  avgSellPrice: number;
+  pnl: number;
+  outcome: string;
+  isFullyClosed: boolean;
+}
+
+export interface AdminIntradaySession {
+  id: string;
+  sessionDate: string;
+  broker: string;
+  totalPnl: number;
+  winCount: number;
+  lossCount: number;
+  breakevenCount: number;
+  totalExecutions: number;
+  trades: AdminIntradayTrade[];
+}
+
 export interface AdminTrade {
   id: string;
   symbol: string;
@@ -66,6 +90,7 @@ export const adminApi = {
   getPlatformStats: () => api.get<PlatformStats>("/admin/platform-stats").then((r) => r.data),
   getUserSummary: (userId: string) => api.get<UserSummary>(`/admin/users/${userId}/summary`).then((r) => r.data),
   getUserTrades: (userId: string) => api.get<AdminTrade[]>(`/admin/users/${userId}/trades`).then((r) => r.data),
+  getUserIntradaySessions: (userId: string) => api.get<AdminIntradaySession[]>(`/admin/users/${userId}/intraday-sessions`).then((r) => r.data),
   toggleUserStatus: (userId: string) => api.post<AdminUser>(`/admin/users/${userId}/toggle-status`).then((r) => r.data),
   approveUser: (userId: string) => api.post<AdminUser>(`/admin/users/${userId}/approve`).then((r) => r.data),
   changePassword: (userId: string, newPassword: string) =>
