@@ -329,8 +329,8 @@ function EntryTimeChart({ data }: { data: { bucket: string; winRate: number; cou
             <XAxis dataKey="bucket" tick={{ fontSize: 10 }} />
             <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} tick={{ fontSize: 10 }} />
             <Tooltip
-              formatter={(v: number, _: string, item: { payload: { count: number } }) =>
-                [`${v}% (${item.payload.count} trades)`, "Win Rate"]
+              formatter={(v: number, _: string, item: { payload?: { count: number } }) =>
+                [`${v}% (${item.payload?.count ?? 0} trades)`, "Win Rate"]
               }
             />
             <Bar dataKey="winRate" radius={[4, 4, 0, 0]} maxBarSize={52}>
