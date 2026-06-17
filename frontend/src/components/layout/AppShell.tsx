@@ -30,7 +30,7 @@ export function AppShell() {
             <TrendingUp size={22} />
           </div>
           <div>
-            <p className="text-lg font-black tracking-tight">EdgeLedger</p>
+            <p className="text-lg font-black tracking-tight">PnL Atlas</p>
             <p className="text-xs text-muted-foreground">Trading Journal</p>
           </div>
         </div>
