@@ -34,4 +34,13 @@ public sealed class ImportsController(StatementImportService imports) : Controll
     [HttpPost("rows")]
     public async Task<ActionResult<StatementImportResult>> ImportRows(ImportCreateRequest request, CancellationToken cancellationToken)
         => Ok(await imports.ImportRowsAsync(request, cancellationToken));
+
+    [HttpPost("debug-text")]
+    [RequestSizeLimit(20_000_000)]
+    public async Task<ActionResult<string>> DebugText(IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0) return BadRequest("File is empty.");
+        await using var stream = file.OpenReadStream();
+        return Ok(await imports.ExtractRawTextAsync(stream, cancellationToken));
+    }
 }

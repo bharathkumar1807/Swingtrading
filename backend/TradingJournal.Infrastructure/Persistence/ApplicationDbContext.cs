@@ -15,6 +15,8 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<IntradaySession> IntradaySessions => Set<IntradaySession>();
     public DbSet<IntradayTrade> IntradayTrades => Set<IntradayTrade>();
     public DbSet<Execution> Executions => Set<Execution>();
+    public DbSet<DailyStockPlan> DailyStockPlans => Set<DailyStockPlan>();
+    public DbSet<DailyPlanLeg> DailyPlanLegs => Set<DailyPlanLeg>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -84,6 +86,28 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.NetAmount).HasPrecision(18, 4);
             entity.HasIndex(x => new { x.SessionId, x.Symbol });
         });
+
+        builder.Entity<DailyStockPlan>(entity =>
+        {
+            entity.Property(x => x.Symbol).HasMaxLength(24).IsRequired();
+            entity.Property(x => x.StopLossPrice).HasPrecision(18, 4);
+            entity.Property(x => x.AvgEntryPrice).HasPrecision(18, 4);
+            entity.Property(x => x.OpenQty).HasPrecision(18, 4);
+            entity.Property(x => x.RealizedPnl).HasPrecision(18, 4);
+            entity.Property(x => x.Pnl).HasPrecision(18, 4);
+            entity.Property(x => x.MaxLossAllowed).HasPrecision(18, 4);
+            entity.Property(x => x.BehaviorNotes).HasMaxLength(1000);
+            entity.HasMany(x => x.Legs).WithOne(x => x.Plan).HasForeignKey(x => x.DailyStockPlanId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.UserId, x.Date });
+        });
+
+        builder.Entity<DailyPlanLeg>(entity =>
+        {
+            entity.Property(x => x.Quantity).HasPrecision(18, 4);
+            entity.Property(x => x.Price).HasPrecision(18, 4);
+            entity.Property(x => x.Notes).HasMaxLength(500);
+            entity.HasIndex(x => x.DailyStockPlanId);
+        });
     }
 
     public async Task EnsureIntradayTablesAsync(ILogger logger)
@@ -152,6 +176,52 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                         CONSTRAINT "FK_Executions_IntradayTrades" FOREIGN KEY ("IntradayTradeId") REFERENCES "IntradayTrades" ("Id")
                     );
                     CREATE INDEX IF NOT EXISTS "IX_Executions_SessionId_Symbol" ON "Executions" ("SessionId", "Symbol");
+
+                    CREATE TABLE IF NOT EXISTS "DailyStockPlans" (
+                        "Id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                        "UserId" text NOT NULL DEFAULT '',
+                        "Date" date NOT NULL,
+                        "Symbol" character varying(24) NOT NULL DEFAULT '',
+                        "EntryTime" time without time zone,
+                        "ExitTime" time without time zone,
+                        "EntryPrice" numeric(18,4),
+                        "ExitPrice" numeric(18,4),
+                        "Size" numeric(18,4),
+                        "Pnl" numeric(18,4) NOT NULL DEFAULT 0,
+                        "MaxLossAllowed" numeric(18,4) NOT NULL DEFAULT 0,
+                        "MarketDirection" integer NOT NULL DEFAULT 0,
+                        "SectorBehavior" integer NOT NULL DEFAULT 0,
+                        "Outcome" integer NOT NULL DEFAULT 0,
+                        "ResultVsPlan" integer NOT NULL DEFAULT 0,
+                        "BehaviorNotes" character varying(1000),
+                        "CreatedAtUtc" timestamp with time zone NOT NULL DEFAULT now(),
+                        "UpdatedAtUtc" timestamp with time zone,
+                        CONSTRAINT "PK_DailyStockPlans" PRIMARY KEY ("Id")
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_DailyStockPlans_UserId_Date" ON "DailyStockPlans" ("UserId", "Date");
+
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "StopLossPrice" numeric(18,4) NOT NULL DEFAULT 0;
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "AvgEntryPrice" numeric(18,4) NOT NULL DEFAULT 0;
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "OpenQty" numeric(18,4) NOT NULL DEFAULT 0;
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "RealizedPnl" numeric(18,4) NOT NULL DEFAULT 0;
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "IsClosed" boolean NOT NULL DEFAULT false;
+                    ALTER TABLE "DailyStockPlans" ADD COLUMN IF NOT EXISTS "EntryTime" time without time zone;
+
+                    CREATE TABLE IF NOT EXISTS "DailyPlanLegs" (
+                        "Id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                        "DailyStockPlanId" uuid NOT NULL,
+                        "Time" time without time zone NOT NULL DEFAULT '00:00:00',
+                        "Action" integer NOT NULL DEFAULT 0,
+                        "LegType" integer NOT NULL DEFAULT 0,
+                        "Quantity" numeric(18,4) NOT NULL DEFAULT 0,
+                        "Price" numeric(18,4) NOT NULL DEFAULT 0,
+                        "Notes" character varying(500),
+                        "CreatedAtUtc" timestamp with time zone NOT NULL DEFAULT now(),
+                        "UpdatedAtUtc" timestamp with time zone,
+                        CONSTRAINT "PK_DailyPlanLegs" PRIMARY KEY ("Id"),
+                        CONSTRAINT "FK_DailyPlanLegs_DailyStockPlans" FOREIGN KEY ("DailyStockPlanId") REFERENCES "DailyStockPlans" ("Id") ON DELETE CASCADE
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_DailyPlanLegs_DailyStockPlanId" ON "DailyPlanLegs" ("DailyStockPlanId");
                     """);
             }
             else
@@ -223,6 +293,64 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                             CONSTRAINT FK_Executions_IntradayTrades FOREIGN KEY (IntradayTradeId) REFERENCES IntradayTrades(Id)
                         );
                         CREATE INDEX IX_Executions_SessionId_Symbol ON Executions (SessionId, Symbol);
+                    END
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DailyStockPlans')
+                    BEGIN
+                        CREATE TABLE DailyStockPlans (
+                            Id uniqueidentifier NOT NULL DEFAULT newid(),
+                            UserId nvarchar(450) NOT NULL DEFAULT '',
+                            Date date NOT NULL,
+                            Symbol nvarchar(24) NOT NULL DEFAULT '',
+                            EntryTime time NULL,
+                            ExitTime time NULL,
+                            EntryPrice decimal(18,4) NULL,
+                            ExitPrice decimal(18,4) NULL,
+                            Size decimal(18,4) NULL,
+                            Pnl decimal(18,4) NOT NULL DEFAULT 0,
+                            MaxLossAllowed decimal(18,4) NOT NULL DEFAULT 0,
+                            MarketDirection int NOT NULL DEFAULT 0,
+                            SectorBehavior int NOT NULL DEFAULT 0,
+                            Outcome int NOT NULL DEFAULT 0,
+                            ResultVsPlan int NOT NULL DEFAULT 0,
+                            BehaviorNotes nvarchar(1000) NULL,
+                            CreatedAtUtc datetime2 NOT NULL DEFAULT GETUTCDATE(),
+                            UpdatedAtUtc datetime2 NULL,
+                            CONSTRAINT PK_DailyStockPlans PRIMARY KEY (Id)
+                        );
+                        CREATE INDEX IX_DailyStockPlans_UserId_Date ON DailyStockPlans (UserId, Date);
+                    END
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'StopLossPrice')
+                        ALTER TABLE DailyStockPlans ADD StopLossPrice decimal(18,4) NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'AvgEntryPrice')
+                        ALTER TABLE DailyStockPlans ADD AvgEntryPrice decimal(18,4) NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'OpenQty')
+                        ALTER TABLE DailyStockPlans ADD OpenQty decimal(18,4) NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'RealizedPnl')
+                        ALTER TABLE DailyStockPlans ADD RealizedPnl decimal(18,4) NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'IsClosed')
+                        ALTER TABLE DailyStockPlans ADD IsClosed bit NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'DailyStockPlans' AND COLUMN_NAME = 'EntryTime')
+                        ALTER TABLE DailyStockPlans ADD EntryTime time NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'DailyPlanLegs')
+                    BEGIN
+                        CREATE TABLE DailyPlanLegs (
+                            Id uniqueidentifier NOT NULL DEFAULT newid(),
+                            DailyStockPlanId uniqueidentifier NOT NULL,
+                            Time time NOT NULL DEFAULT '00:00:00',
+                            Action int NOT NULL DEFAULT 0,
+                            LegType int NOT NULL DEFAULT 0,
+                            Quantity decimal(18,4) NOT NULL DEFAULT 0,
+                            Price decimal(18,4) NOT NULL DEFAULT 0,
+                            Notes nvarchar(500) NULL,
+                            CreatedAtUtc datetime2 NOT NULL DEFAULT GETUTCDATE(),
+                            UpdatedAtUtc datetime2 NULL,
+                            CONSTRAINT PK_DailyPlanLegs PRIMARY KEY (Id),
+                            CONSTRAINT FK_DailyPlanLegs_DailyStockPlans FOREIGN KEY (DailyStockPlanId) REFERENCES DailyStockPlans(Id) ON DELETE CASCADE
+                        );
+                        CREATE INDEX IX_DailyPlanLegs_DailyStockPlanId ON DailyPlanLegs (DailyStockPlanId);
                     END
                     """);
             }

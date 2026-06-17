@@ -40,8 +40,13 @@ export function UploadIntradayModal({
         setMessage(`Found ${result.totalExecutions} executions across ${result.trades.length} symbols on ${formatDate(result.sessionDate)}.`);
       }
     } catch (err: unknown) {
-      const backendMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setError(backendMsg ?? "Could not read this statement. Make sure it is a Robinhood Transaction Confirmation PDF.");
+      const axErr = err as { response?: { status?: number; data?: { error?: string } }; request?: unknown };
+      if (!axErr.response && axErr.request) {
+        setError("Cannot reach the server. Make sure the backend is running at localhost:5117.");
+      } else {
+        const backendMsg = axErr.response?.data?.error;
+        setError(backendMsg ?? "Could not read this statement. Make sure it is a Robinhood Transaction Confirmation PDF.");
+      }
     } finally {
       setLoading(false);
     }

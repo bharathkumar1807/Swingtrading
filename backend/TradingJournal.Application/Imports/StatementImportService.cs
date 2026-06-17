@@ -57,6 +57,13 @@ public sealed partial class StatementImportService(IApplicationDbContext db, IUs
         return trades.Select(t => new OpenLotDto(t.Id, t.Symbol, t.Size, t.EntryPrice, t.EntryDate)).ToList();
     }
 
+    public async Task<string> ExtractRawTextAsync(Stream pdfStream, CancellationToken cancellationToken)
+    {
+        await using var memory = new MemoryStream();
+        await pdfStream.CopyToAsync(memory, cancellationToken);
+        return ExtractText(memory.ToArray());
+    }
+
     public async Task<StatementImportResult> ImportRowsAsync(ImportCreateRequest request, CancellationToken cancellationToken)
     {
         var trades = request.Rows.Select(row =>
@@ -118,16 +125,26 @@ public sealed partial class StatementImportService(IApplicationDbContext db, IUs
 
     private static string ExtractText(byte[] bytes)
     {
-        using var reader = new PdfReader(new MemoryStream(bytes));
-        using var document = new PdfDocument(reader);
-        var pages = new List<string>();
-        for (var pageNumber = 1; pageNumber <= document.GetNumberOfPages(); pageNumber++)
+        try
         {
-            var strategy = new LocationTextExtractionStrategy();
-            pages.Add(PdfTextExtractor.GetTextFromPage(document.GetPage(pageNumber), strategy));
+            using var reader = new PdfReader(new MemoryStream(bytes));
+            using var document = new PdfDocument(reader);
+            var pages = new List<string>();
+            for (var pageNumber = 1; pageNumber <= document.GetNumberOfPages(); pageNumber++)
+            {
+                var strategy = new LocationTextExtractionStrategy();
+                pages.Add(PdfTextExtractor.GetTextFromPage(document.GetPage(pageNumber), strategy));
+            }
+            var text = string.Join(Environment.NewLine, pages);
+            if (string.IsNullOrWhiteSpace(text))
+                throw new InvalidOperationException("No text could be extracted from this PDF. It may be a scanned/image-based document. Please use a text-based Robinhood Account Activity statement.");
+            return text;
         }
-
-        return string.Join(Environment.NewLine, pages);
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Could not open PDF: {ex.Message}. Make sure the file is a valid, unencrypted Robinhood Account Activity PDF.");
+        }
     }
 
     private static IReadOnlyList<ImportedTradeDto> ParseRobinhoodActivity(string text)
@@ -184,6 +201,6 @@ public sealed partial class StatementImportService(IApplicationDbContext db, IUs
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
 
-    [GeneratedRegex(@"^(?:(?<description>[A-Za-z][A-Za-z\-.& ]{1,80}?)\s+)?(?:CUSIP:\s+\S+\s+)?(?<symbol>[A-Z.]{1,8})\s+Margin\s+(?<action>Buy|Sell)\s+(?<date>\d{2}/\d{2}/\d{4})\s+(?<qty>[\d.]+)\s+\$(?<price>[\d,]+\.\d+)\s+\$(?<amount>[\d,]+\.\d+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^(?:(?<description>[A-Za-z][A-Za-z\-.& ]{1,80}?)\s+)?(?:CUSIP:\s+\S+\s+)?(?<symbol>[A-Z.]{1,8})\s+(?:Margin|Cash|IRA|Option|Roth|Individual)\s+(?<action>Buy|Sell)\s+(?<date>\d{2}/\d{2}/\d{4})\s+(?<qty>[\d.]+)\s+\$(?<price>[\d,]+\.\d+)\s+\$(?<amount>[\d,]+\.\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex ActivityRow();
 }

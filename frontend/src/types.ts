@@ -168,6 +168,66 @@ export interface IntradayPreview {
   trades: IntradayTradeEntry[];
 }
 
+export type MarketDirection = "TrendingUp" | "TrendingDown" | "Choppy" | "RangeBound";
+export type SectorBehavior = "Strong" | "Weak" | "Mixed";
+export type DailyPlanOutcome = "Win" | "Loss" | "Breakeven" | "Skipped";
+export type DailyResultVsPlan = "FollowedPlan" | "BrokeRule" | "Partial";
+export type LegAction = "Buy" | "Sell";
+export type LegType = "Entry" | "AddToPosition" | "PartialExit" | "StopLossExit" | "FullExit";
+
+export interface DailyPlanLeg {
+  id: string;
+  time: string;
+  action: LegAction;
+  legType: LegType;
+  quantity: number;
+  price: number;
+  realizedPnl: number;
+  notes?: string;
+}
+
+export interface DailyStockPlan {
+  id: string;
+  date: string;
+  symbol: string;
+  stopLossPrice: number;
+  avgEntryPrice: number;
+  openQty: number;
+  realizedPnl: number;
+  pnl: number;
+  isClosed: boolean;
+  maxLossAllowed: number;
+  marketDirection: MarketDirection;
+  sectorBehavior: SectorBehavior;
+  outcome: DailyPlanOutcome;
+  resultVsPlan: DailyResultVsPlan;
+  behaviorNotes?: string;
+  entryTime?: string;
+  legs: DailyPlanLeg[];
+}
+
+export interface SymbolWeeklyStats {
+  symbol: string;
+  wins: number;
+  losses: number;
+  skipped: number;
+  ruleBreaks: number;
+  totalPnl: number;
+  winRate: number;
+}
+
+export interface WeeklyPlanStats {
+  weekStart: string;
+  weekEnd: string;
+  symbolStats: SymbolWeeklyStats[];
+  totalTrades: number;
+  totalWins: number;
+  totalLosses: number;
+  ruleBreaks: number;
+  totalPnl: number;
+  winRate: number;
+}
+
 export interface Review {
   weekly: {
     winRate: number;

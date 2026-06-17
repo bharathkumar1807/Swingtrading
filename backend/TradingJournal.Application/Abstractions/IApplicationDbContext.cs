@@ -10,5 +10,7 @@ public interface IApplicationDbContext
     DbSet<IntradaySession> IntradaySessions { get; }
     DbSet<IntradayTrade> IntradayTrades { get; }
     DbSet<Execution> Executions { get; }
+    DbSet<DailyStockPlan> DailyStockPlans { get; }
+    DbSet<DailyPlanLeg> DailyPlanLegs { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
