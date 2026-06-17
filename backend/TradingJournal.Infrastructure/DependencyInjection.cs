@@ -6,12 +6,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using TradingJournal.Application.Abstractions;
+using TradingJournal.Application.Admin;
 using TradingJournal.Application.Analytics;
 using TradingJournal.Application.Exports;
 using TradingJournal.Application.Imports;
 using TradingJournal.Application.DailyPlan;
 using TradingJournal.Application.Intraday;
 using TradingJournal.Application.Trades;
+using TradingJournal.Infrastructure.Admin;
 using TradingJournal.Infrastructure.Auth;
 using TradingJournal.Infrastructure.Files;
 using TradingJournal.Infrastructure.Identity;
@@ -74,6 +76,7 @@ public static class DependencyInjection
         services.AddScoped<StatementImportService>();
         services.AddScoped<IntradayService>();
         services.AddScoped<DailyPlanService>();
+        services.AddScoped<IAdminService, AdminService>();
         services.AddHostedService<AnalyticsReviewWorker>();
         return services;
     }

@@ -1,6 +1,8 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "@/components/layout/AppShell";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { AdminRoute } from "@/components/layout/AdminRoute";
+import { AdminPage } from "@/pages/AdminPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { MistakeAnalyticsPage } from "@/pages/MistakeAnalyticsPage";
@@ -27,6 +29,12 @@ export const router = createBrowserRouter([
           { path: "/mistakes", element: <MistakeAnalyticsPage /> },
           { path: "/strategies", element: <StrategyAnalyticsPage /> },
           { path: "/settings", element: <SettingsPage /> },
+          {
+            element: <AdminRoute />,
+            children: [
+              { path: "/admin", element: <AdminPage /> },
+            ],
+          },
         ],
       },
     ],

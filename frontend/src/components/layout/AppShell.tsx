@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BarChart3, BookOpenCheck, Brain, ChevronRight, LineChart, LogOut, PieChart, Settings, Table2, TrendingUp, Zap } from "lucide-react";
+import { BarChart3, BookOpenCheck, Brain, ChevronRight, LineChart, LogOut, PieChart, Settings, ShieldAlert, Table2, TrendingUp, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -19,12 +19,13 @@ export function AppShell() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
+  const isAdmin = user?.roles?.includes("Admin") ?? false;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.12),transparent_32%),linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] dark:bg-none dark:bg-background">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-border bg-white/90 p-5 backdrop-blur xl:block dark:bg-card/90">
-        <div className="flex items-center gap-3">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 flex-col border-r border-border bg-white/90 backdrop-blur xl:flex dark:bg-card/90">
+        <div className="flex shrink-0 items-center gap-3 px-5 pt-5">
           <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/25">
             <TrendingUp size={22} />
           </div>
@@ -33,7 +34,7 @@ export function AppShell() {
             <p className="text-xs text-muted-foreground">Trading Journal</p>
           </div>
         </div>
-        <nav className="mt-8 space-y-1">
+        <nav className="mt-6 flex-1 overflow-y-auto px-5 pb-2 space-y-1">
           {nav.map((item) => (
             <NavLink
               key={item.to}
@@ -44,13 +45,24 @@ export function AppShell() {
               <ChevronRight size={16} />
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => cn("flex items-center justify-between rounded-xl px-3 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800", isActive && "bg-violet-50 text-violet-700 ring-1 ring-violet-100 dark:bg-violet-500/10 dark:text-violet-300")}
+            >
+              <span className="flex items-center gap-3"><ShieldAlert size={18} />Admin</span>
+              <ChevronRight size={16} />
+            </NavLink>
+          )}
         </nav>
-        <div className="absolute bottom-5 left-5 right-5 rounded-xl border border-border bg-slate-50 p-4 dark:bg-slate-900">
-          <p className="text-sm font-semibold">{user?.fullName ?? "Trader"}</p>
-          <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
-          <Button variant="ghost" size="sm" className="mt-3 w-full justify-start" onClick={() => { dispatch(logout()); navigate("/login"); }}>
-            <LogOut size={16} /> Sign out
-          </Button>
+        <div className="shrink-0 px-5 pb-5">
+          <div className="rounded-xl border border-border bg-slate-50 p-4 dark:bg-slate-900">
+            <p className="text-sm font-semibold">{user?.fullName ?? "Trader"}</p>
+            <p className="truncate text-xs text-muted-foreground">{user?.email}</p>
+            <Button variant="ghost" size="sm" className="mt-3 w-full justify-start" onClick={() => { dispatch(logout()); navigate("/login"); }}>
+              <LogOut size={16} /> Sign out
+            </Button>
+          </div>
         </div>
       </aside>
 
@@ -67,17 +79,17 @@ export function AppShell() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold md:flex">
-              <BarChart3 size={16} className="text-emerald-600" /> Live edge tracking
+              <div className="hidden items-center gap-2 rounded-full border border-border bg-card px-3 py-2 text-sm font-semibold md:flex">
+                <BarChart3 size={16} className="text-emerald-600" /> Live edge tracking
+              </div>
+              <button
+                onClick={() => { dispatch(logout()); navigate("/login"); }}
+                className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-rose-500 transition xl:hidden dark:text-slate-400 dark:hover:bg-slate-800"
+                title="Sign out"
+              >
+                <LogOut size={18} />
+              </button>
             </div>
-            <button
-              onClick={() => { dispatch(logout()); navigate("/login"); }}
-              className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-rose-500 transition xl:hidden dark:text-slate-400 dark:hover:bg-slate-800"
-              title="Sign out"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
           </div>
         </header>
         <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
@@ -105,6 +117,22 @@ export function AppShell() {
               )}
             </NavLink>
           ))}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) => cn(
+                "flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10px] font-semibold text-slate-500 transition dark:text-slate-400",
+                isActive && "text-violet-700 dark:text-violet-400"
+              )}
+            >
+              {({ isActive }) => (
+                <>
+                  <ShieldAlert size={20} className={cn(isActive && "stroke-violet-600 dark:stroke-violet-400")} />
+                  Admin
+                </>
+              )}
+            </NavLink>
+          )}
         </div>
       </nav>
     </div>

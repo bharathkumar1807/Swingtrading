@@ -12,6 +12,7 @@ using TradingJournal.Application.Trades;
 using TradingJournal.Infrastructure;
 using TradingJournal.Infrastructure.Identity;
 using TradingJournal.Infrastructure.Persistence;
+using TradingJournal.Application.Admin;
 
 var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -75,6 +76,9 @@ if (app.Configuration.GetValue("Database:EnsureCreatedOnStartup", true))
         await db.EnsureIntradayTablesAsync(app.Logger);
 
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+        // Seed demo account
         const string demoEmail = "trader@example.com";
         if (await userManager.FindByEmailAsync(demoEmail) is null)
         {
@@ -84,6 +88,21 @@ if (app.Configuration.GetValue("Database:EnsureCreatedOnStartup", true))
                 app.Logger.LogWarning("Demo seed failed: {Errors}", string.Join("; ", result.Errors.Select(e => e.Description)));
             else
                 app.Logger.LogInformation("Demo account seeded: {Email}", demoEmail);
+        }
+
+        // Seed Admin role and assign to configured admin email
+        if (!await roleManager.RoleExistsAsync(AppRoles.Admin))
+            await roleManager.CreateAsync(new IdentityRole(AppRoles.Admin));
+
+        var adminEmail = app.Configuration.GetValue<string>("AdminSeeder:Email");
+        if (!string.IsNullOrWhiteSpace(adminEmail))
+        {
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if (adminUser is not null && !await userManager.IsInRoleAsync(adminUser, AppRoles.Admin))
+            {
+                await userManager.AddToRoleAsync(adminUser, AppRoles.Admin);
+                app.Logger.LogInformation("Admin role assigned to {Email}", adminEmail);
+            }
         }
     }
     catch (Exception ex)

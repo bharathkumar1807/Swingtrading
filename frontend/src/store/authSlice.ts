@@ -1,8 +1,15 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { api } from "@/services/api";
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+}
+
 interface AuthState {
-  user?: { id: string; email: string; fullName: string };
+  user?: AuthUser;
   loading: boolean;
   error?: string;
 }
@@ -28,7 +35,7 @@ export const login = createAsyncThunk("auth/login", async (payload: { email: str
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("refreshToken", data.refreshToken);
     localStorage.setItem("user", JSON.stringify(data.user));
-    return data.user as AuthState["user"];
+    return data.user as AuthUser;
   } catch (error) {
     return rejectWithValue(authError(error));
   }
@@ -40,7 +47,7 @@ export const register = createAsyncThunk("auth/register", async (payload: { emai
     localStorage.setItem("accessToken", data.accessToken);
     localStorage.setItem("refreshToken", data.refreshToken);
     localStorage.setItem("user", JSON.stringify(data.user));
-    return data.user as AuthState["user"];
+    return data.user as AuthUser;
   } catch (error) {
     return rejectWithValue(authError(error));
   }

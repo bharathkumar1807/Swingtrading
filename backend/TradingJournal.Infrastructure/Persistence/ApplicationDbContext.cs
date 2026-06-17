@@ -352,6 +352,15 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                         );
                         CREATE INDEX IX_DailyPlanLegs_DailyStockPlanId ON DailyPlanLegs (DailyStockPlanId);
                     END
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AspNetUsers' AND COLUMN_NAME = 'IsActive')
+                        ALTER TABLE AspNetUsers ADD IsActive bit NOT NULL DEFAULT 1;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AspNetUsers' AND COLUMN_NAME = 'IsApproved')
+                        ALTER TABLE AspNetUsers ADD IsApproved bit NOT NULL DEFAULT 1;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AspNetUsers' AND COLUMN_NAME = 'LastActiveAt')
+                        ALTER TABLE AspNetUsers ADD LastActiveAt datetime2 NULL;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AspNetUsers' AND COLUMN_NAME = 'JoinedAt')
+                        ALTER TABLE AspNetUsers ADD JoinedAt datetime2 NOT NULL DEFAULT GETUTCDATE();
                     """);
             }
         }
