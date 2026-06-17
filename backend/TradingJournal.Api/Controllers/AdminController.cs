@@ -43,6 +43,11 @@ public sealed class AdminController(IAdminService adminService) : ControllerBase
         await adminService.ChangePasswordAsync(userId, req.NewPassword, ct);
         return NoContent();
     }
+
+    [HttpPatch("users/{userId}/name")]
+    public async Task<ActionResult<AdminUserDto>> UpdateUserName(string userId, [FromBody] UpdateUserNameRequest req, CancellationToken ct)
+        => Ok(await adminService.UpdateUserNameAsync(userId, req.FullName, ct));
 }
 
 public sealed record ChangePasswordRequest(string NewPassword);
+public sealed record UpdateUserNameRequest(string FullName);

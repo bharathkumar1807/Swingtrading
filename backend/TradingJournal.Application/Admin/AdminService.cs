@@ -10,18 +10,30 @@ public interface IAdminService
     Task<List<AdminUserDto>> GetPendingUsersAsync(CancellationToken ct);
     Task<List<AdminTradeDto>> GetUserTradesAsync(string userId, CancellationToken ct);
     Task ChangePasswordAsync(string userId, string newPassword, CancellationToken ct);
+    Task<AdminUserDto> UpdateUserNameAsync(string userId, string fullName, CancellationToken ct);
 }
 
 public sealed record AdminTradeDto(
     Guid Id,
     string Symbol,
+    string Sector,
     string Strategy,
     string Broker,
+    string PositionType,
     decimal Pnl,
     decimal RMultiple,
+    decimal RiskAmount,
+    decimal RewardAmount,
     string Outcome,
     DateTime EntryDate,
     DateTime? ExitDate,
     decimal EntryPrice,
     decimal? ExitPrice,
-    decimal Size);
+    decimal StopLoss,
+    decimal Size,
+    decimal Fees,
+    decimal Slippage,
+    int ConfidenceScore,
+    string? Notes,
+    List<string> Tags,
+    List<string> Mistakes);

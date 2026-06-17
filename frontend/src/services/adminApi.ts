@@ -37,16 +37,27 @@ export interface UserSummary {
 export interface AdminTrade {
   id: string;
   symbol: string;
+  sector: string;
   strategy: string;
   broker: string;
+  positionType: string;
   pnl: number;
   rMultiple: number;
+  riskAmount: number;
+  rewardAmount: number;
   outcome: string;
   entryDate: string;
   exitDate: string | null;
   entryPrice: number;
   exitPrice: number | null;
+  stopLoss: number;
   size: number;
+  fees: number;
+  slippage: number;
+  confidenceScore: number;
+  notes: string | null;
+  tags: string[];
+  mistakes: string[];
 }
 
 export const adminApi = {
@@ -59,4 +70,6 @@ export const adminApi = {
   approveUser: (userId: string) => api.post<AdminUser>(`/admin/users/${userId}/approve`).then((r) => r.data),
   changePassword: (userId: string, newPassword: string) =>
     api.post(`/admin/users/${userId}/change-password`, { newPassword }),
+  updateUserName: (userId: string, fullName: string) =>
+    api.patch<AdminUser>(`/admin/users/${userId}/name`, { fullName }).then((r) => r.data),
 };

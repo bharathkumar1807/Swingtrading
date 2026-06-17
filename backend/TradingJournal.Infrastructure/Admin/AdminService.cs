@@ -107,14 +107,18 @@ public sealed class AdminService(ApplicationDbContext db, UserManager<Applicatio
         _ = await userManager.FindByIdAsync(userId)
             ?? throw new KeyNotFoundException($"User {userId} not found.");
 
-        return await db.Trades
+        var trades = await db.Trades
             .Where(t => t.UserId == userId)
             .OrderByDescending(t => t.EntryDate)
-            .Select(t => new AdminTradeDto(
-                t.Id, t.Symbol, t.Strategy, t.Broker,
-                t.Pnl, t.RMultiple, t.Outcome.ToString(),
-                t.EntryDate, t.ExitDate, t.EntryPrice, t.ExitPrice, t.Size))
             .ToListAsync(ct);
+
+        return trades.Select(t => new AdminTradeDto(
+            t.Id, t.Symbol, t.Sector, t.Strategy, t.Broker,
+            t.PositionType.ToString(), t.Pnl, t.RMultiple,
+            t.RiskAmount, t.RewardAmount, t.Outcome.ToString(),
+            t.EntryDate, t.ExitDate, t.EntryPrice, t.ExitPrice,
+            t.StopLoss, t.Size, t.Fees, t.Slippage,
+            t.ConfidenceScore, t.Notes, t.Tags, t.Mistakes)).ToList();
     }
 
     public async Task ChangePasswordAsync(string userId, string newPassword, CancellationToken ct)
@@ -126,6 +130,16 @@ public sealed class AdminService(ApplicationDbContext db, UserManager<Applicatio
         var result = await userManager.ResetPasswordAsync(user, token, newPassword);
         if (!result.Succeeded)
             throw new InvalidOperationException(string.Join("; ", result.Errors.Select(e => e.Description)));
+    }
+
+    public async Task<AdminUserDto> UpdateUserNameAsync(string userId, string fullName, CancellationToken ct)
+    {
+        var user = await userManager.FindByIdAsync(userId)
+            ?? throw new KeyNotFoundException($"User {userId} not found.");
+
+        user.FullName = fullName.Trim();
+        await userManager.UpdateAsync(user);
+        return await BuildDtoAsync(user, ct);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

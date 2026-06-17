@@ -7,38 +7,14 @@ import { login, register } from "@/store/authSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 
 const QUOTES = [
-  {
-    text: "The goal of a successful trader is to make the best trades. Money is secondary.",
-    author: "Alexander Elder",
-  },
-  {
-    text: "I'm always thinking about losing money as opposed to making money.",
-    author: "Paul Tudor Jones",
-  },
-  {
-    text: "Risk comes from not knowing what you're doing.",
-    author: "Warren Buffett",
-  },
-  {
-    text: "It's not whether you're right or wrong, but how much money you make when you're right.",
-    author: "George Soros",
-  },
-  {
-    text: "Amateurs focus on rewards. Professionals focus on risk.",
-    author: "Unknown",
-  },
-  {
-    text: "Plan the trade and trade the plan.",
-    author: "Floor Trader Maxim",
-  },
-  {
-    text: "The market can remain irrational longer than you can remain solvent.",
-    author: "John Maynard Keynes",
-  },
-  {
-    text: "In trading, the impossible happens about twice a year.",
-    author: "Henri M. Simoes",
-  },
+  { text: "The goal of a successful trader is to make the best trades. Money is secondary.", author: "Alexander Elder" },
+  { text: "I'm always thinking about losing money as opposed to making money.", author: "Paul Tudor Jones" },
+  { text: "Risk comes from not knowing what you're doing.", author: "Warren Buffett" },
+  { text: "It's not whether you're right or wrong, but how much money you make when you're right.", author: "George Soros" },
+  { text: "Amateurs focus on rewards. Professionals focus on risk.", author: "Unknown" },
+  { text: "Plan the trade and trade the plan.", author: "Floor Trader Maxim" },
+  { text: "The market can remain irrational longer than you can remain solvent.", author: "John Maynard Keynes" },
+  { text: "In trading, the impossible happens about twice a year.", author: "Henri M. Simoes" },
 ];
 
 const CHART_PATH =
@@ -46,30 +22,28 @@ const CHART_PATH =
 
 export function LoginPage() {
   const dispatch = useAppDispatch();
-  const user = useAppSelector((state) => state.auth.user);
-  const { loading, error } = useAppSelector((state) => state.auth);
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
+  const user     = useAppSelector((s) => s.auth.user);
+  const { loading, error } = useAppSelector((s) => s.auth);
+
+  const [mode, setMode]       = useState<"login" | "register">("login");
+  const [email, setEmail]     = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [quoteIndex, setQuoteIndex] = useState(0);
-  const [fading, setFading] = useState(false);
+  const [fading, setFading]   = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => {
       setFading(true);
-      setTimeout(() => {
-        setQuoteIndex((i) => (i + 1) % QUOTES.length);
-        setFading(false);
-      }, 500);
+      setTimeout(() => { setQuoteIndex((i) => (i + 1) % QUOTES.length); setFading(false); }, 500);
     }, 5000);
     return () => clearInterval(id);
   }, []);
 
   if (user) return <Navigate to="/" replace />;
 
-  function submit(event: FormEvent) {
-    event.preventDefault();
+  function submit(e: FormEvent) {
+    e.preventDefault();
     if (mode === "login") dispatch(login({ email, password }));
     else dispatch(register({ email, password, fullName }));
   }
@@ -77,18 +51,22 @@ export function LoginPage() {
   const quote = QUOTES[quoteIndex];
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.15fr_0.85fr]">
-      {/* ── Left panel ── */}
-      <section className="relative hidden overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-between lg:p-14">
-        {/* Background glow blobs */}
-        <div className="pointer-events-none absolute inset-0">
+    /* Stack on mobile, side-by-side on lg+ */
+    <main className="flex min-h-screen flex-col lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+
+      {/* ── Brand / quote panel ────────────────────────────────────── */}
+      <section className="relative flex flex-col justify-between overflow-hidden bg-slate-950
+        px-6 py-8 lg:px-14 lg:py-14">
+
+        {/* Glow blobs — desktop only (expensive blur, skip on mobile) */}
+        <div className="pointer-events-none absolute inset-0 hidden lg:block">
           <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-emerald-500/20 blur-3xl" />
           <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-blue-600/15 blur-3xl" />
           <div className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-400/10 blur-2xl" />
         </div>
 
-        {/* Decorative SVG equity curve */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-32 opacity-20">
+        {/* Decorative equity curve — desktop only */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-32 opacity-20 hidden lg:block">
           <svg viewBox="0 0 500 130" preserveAspectRatio="none" className="h-32 w-full">
             <defs>
               <linearGradient id="curveGrad" x1="0" y1="0" x2="0" y2="1">
@@ -96,48 +74,39 @@ export function LoginPage() {
                 <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
               </linearGradient>
             </defs>
-            <path
-              d={`${CHART_PATH} L500,130 L0,130 Z`}
-              fill="url(#curveGrad)"
-            />
-            <path
-              d={CHART_PATH}
-              fill="none"
-              stroke="#10b981"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
+            <path d={`${CHART_PATH} L500,130 L0,130 Z`} fill="url(#curveGrad)" />
+            <path d={CHART_PATH} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
 
-        {/* Top logo */}
+        {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/40">
-            <BarChart2 size={20} className="text-white" />
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500 shadow-lg shadow-emerald-500/40 lg:h-10 lg:w-10">
+            <BarChart2 size={18} className="text-white" />
           </div>
-          <span className="text-xl font-black tracking-tight text-white">PnL Atlas</span>
+          <span className="text-lg font-black tracking-tight text-white lg:text-xl">PnL Atlas</span>
         </div>
 
         {/* Center content */}
-        <div className="relative z-10 space-y-8">
+        <div className="relative z-10 space-y-4 py-4 lg:space-y-8 lg:py-0">
           <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400 lg:mb-3 lg:text-xs">
               Professional Trading Journal
             </p>
-            <h1 className="max-w-lg text-5xl font-black leading-[1.1] tracking-tight text-white">
-              Map every trade.<br />Build your edge.
+            <h1 className="max-w-lg text-2xl font-black leading-tight tracking-tight text-white lg:text-5xl lg:leading-[1.1]">
+              Map every trade.<br className="hidden lg:block" /> Build your edge.
             </h1>
           </div>
 
           {/* Rotating quote */}
           <div
-            className="max-w-sm border-l-2 border-emerald-500 pl-5 transition-opacity duration-500"
+            className="max-w-sm border-l-2 border-emerald-500 pl-4 transition-opacity duration-500 lg:pl-5"
             style={{ opacity: fading ? 0 : 1 }}
           >
-            <p className="text-base font-medium italic leading-relaxed text-slate-200">
+            <p className="text-sm font-medium italic leading-relaxed text-slate-200 lg:text-base">
               "{quote.text}"
             </p>
-            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-emerald-400">
+            <p className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400 lg:mt-2 lg:text-xs">
               — {quote.author}
             </p>
           </div>
@@ -149,31 +118,23 @@ export function LoginPage() {
                 key={i}
                 onClick={() => { setFading(false); setQuoteIndex(i); }}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === quoteIndex ? "w-6 bg-emerald-400" : "w-1.5 bg-slate-600 hover:bg-slate-400"
+                  i === quoteIndex ? "w-5 bg-emerald-400" : "w-1.5 bg-slate-600 hover:bg-slate-400"
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Bottom tagline */}
-        <div className="relative z-10">
+        {/* Bottom tagline — desktop only */}
+        <div className="relative z-10 hidden lg:block">
           <p className="text-xs text-slate-500">
             Analytics · Mistake tracking · Review rituals · Edge measurement
           </p>
         </div>
       </section>
 
-      {/* ── Right panel (form) ── */}
-      <section className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 lg:bg-slate-900">
-        {/* Mobile logo */}
-        <div className="mb-8 flex items-center gap-3 lg:hidden">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-emerald-500">
-            <BarChart2 size={18} className="text-white" />
-          </div>
-          <span className="text-lg font-black tracking-tight text-white">PnL Atlas</span>
-        </div>
-
+      {/* ── Form panel ─────────────────────────────────────────────── */}
+      <section className="flex flex-col items-center justify-center bg-slate-950 p-6 lg:bg-slate-900">
         <form
           onSubmit={submit}
           className="w-full max-w-sm space-y-5 rounded-2xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-sm"
@@ -229,10 +190,7 @@ export function LoginPage() {
             </div>
           )}
 
-          <Button
-            className="w-full bg-emerald-500 font-bold text-white hover:bg-emerald-400"
-            disabled={loading}
-          >
+          <Button className="w-full bg-emerald-500 font-bold text-white hover:bg-emerald-400" disabled={loading}>
             {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
           </Button>
 

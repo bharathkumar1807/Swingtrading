@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Users, Activity, TrendingUp, BarChart3, Star, X, ChevronRight, ShieldAlert, UserCheck, Clock, KeyRound, ListOrdered, LayoutDashboard, Eye, EyeOff } from "lucide-react";
+import { Users, Activity, TrendingUp, BarChart3, Star, X, ChevronRight, ShieldAlert, UserCheck, Clock, KeyRound, ListOrdered, LayoutDashboard, Eye, EyeOff, Pencil, Check, ChevronDown, ChevronUp, Tag, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,13 +25,117 @@ function StatCard({ icon: Icon, label, value, sub, color }: { icon: React.Elemen
 
 type DrawerTab = "overview" | "trades" | "password";
 
-function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }) {
+function TradeRow({ t }: { t: AdminTrade }) {
+  const [expanded, setExpanded] = useState(false);
+  const isWin = t.outcome === "Win";
+  const isLoss = t.outcome === "Loss";
+  const isLong = t.positionType === "Long";
+
+  return (
+    <>
+      <tr
+        className="border-b border-border hover:bg-muted/20 cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <td className="px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold">{t.symbol}</span>
+            <span className={`rounded px-1 py-0.5 text-[10px] font-bold ${isLong ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400"}`}>
+              {t.positionType}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{t.sector || "—"}</p>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+          <div>{new Date(t.entryDate).toLocaleDateString()}</div>
+          <div>{t.exitDate ? new Date(t.exitDate).toLocaleDateString() : <span className="italic">Open</span>}</div>
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`font-bold text-sm ${t.pnl >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+            {currency.format(t.pnl)}
+          </span>
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`font-mono text-xs font-bold ${t.rMultiple >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
+            {t.rMultiple.toFixed(2)}R
+          </span>
+        </td>
+        <td className="px-3 py-2.5">
+          <div className="flex items-center gap-1">
+            {"★★★★★".split("").map((_, i) => (
+              <span key={i} className={`text-[10px] ${i < t.confidenceScore ? "text-amber-400" : "text-muted-foreground/30"}`}>★</span>
+            ))}
+          </div>
+        </td>
+        <td className="px-3 py-2.5">
+          <Badge tone={isWin ? "green" : isLoss ? "red" : "slate"}>{t.outcome}</Badge>
+        </td>
+        <td className="px-3 py-2.5 text-muted-foreground">
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="border-b border-border bg-muted/10">
+          <td colSpan={7} className="px-4 py-3">
+            <div className="grid grid-cols-3 gap-x-6 gap-y-2 text-xs">
+              <Detail label="Strategy" value={t.strategy || "—"} />
+              <Detail label="Broker" value={t.broker || "—"} />
+              <Detail label="Entry Price" value={`$${t.entryPrice.toFixed(2)}`} />
+              <Detail label="Exit Price" value={t.exitPrice != null ? `$${t.exitPrice.toFixed(2)}` : "—"} />
+              <Detail label="Stop Loss" value={`$${t.stopLoss.toFixed(2)}`} />
+              <Detail label="Size" value={t.size.toString()} />
+              <Detail label="Risk $" value={currency.format(t.riskAmount)} />
+              <Detail label="Reward $" value={currency.format(t.rewardAmount)} />
+              <Detail label="Fees" value={t.fees > 0 ? currency.format(t.fees) : "—"} />
+              {t.slippage > 0 && <Detail label="Slippage" value={currency.format(t.slippage)} />}
+            </div>
+            {t.tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Tag size={11} className="text-muted-foreground" />
+                {t.tags.map((tag) => (
+                  <span key={tag} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">{tag}</span>
+                ))}
+              </div>
+            )}
+            {t.mistakes.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <AlertCircle size={11} className="text-rose-500" />
+                {t.mistakes.map((m) => (
+                  <span key={m} className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{m}</span>
+                ))}
+              </div>
+            )}
+            {t.notes && (
+              <p className="mt-2 text-xs text-muted-foreground italic border-l-2 border-border pl-2">{t.notes}</p>
+            )}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <span className="text-muted-foreground">{label}: </span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  );
+}
+
+function UserDrawer({ userId, onClose, onUserUpdated }: { userId: string; onClose: () => void; onUserUpdated: (u: AdminUser) => void }) {
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [summary, setSummary] = useState<UserSummary | null>(null);
   const [trades, setTrades] = useState<AdminTrade[] | null>(null);
   const [tradesError, setTradesError] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingTrades, setLoadingTrades] = useState(false);
+
+  // name edit state
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [nameSaving, setNameSaving] = useState(false);
 
   // password tab state
   const [newPassword, setNewPassword] = useState("");
@@ -41,7 +145,10 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
   const pwRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    adminApi.getUserSummary(userId).then(setSummary).finally(() => setLoadingSummary(false));
+    adminApi.getUserSummary(userId).then((s) => {
+      setSummary(s);
+      setNameValue(s.fullName);
+    }).finally(() => setLoadingSummary(false));
   }, [userId]);
 
   useEffect(() => {
@@ -54,6 +161,19 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
         .finally(() => setLoadingTrades(false));
     }
   }, [tab, trades, tradesError, userId]);
+
+  async function handleSaveName() {
+    if (!nameValue.trim() || nameValue.trim() === summary?.fullName) { setEditingName(false); return; }
+    setNameSaving(true);
+    try {
+      const updated = await adminApi.updateUserName(userId, nameValue.trim());
+      setSummary((s) => s ? { ...s, fullName: nameValue.trim() } : s);
+      onUserUpdated(updated);
+      setEditingName(false);
+    } finally {
+      setNameSaving(false);
+    }
+  }
 
   async function handleChangePassword() {
     if (!newPassword.trim()) return;
@@ -72,29 +192,56 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
 
   const tabs = [
     { id: "overview" as DrawerTab, label: "Overview", icon: LayoutDashboard },
-    { id: "trades" as DrawerTab, label: "Trades", icon: ListOrdered },
+    { id: "trades" as DrawerTab, label: `Trades${trades ? ` (${trades.length})` : ""}`, icon: ListOrdered },
     { id: "password" as DrawerTab, label: "Password", icon: KeyRound },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
       <div
-        className="flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-2xl"
+        className="flex h-full w-full max-w-2xl flex-col border-l border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-          <div>
+          <div className="flex-1 min-w-0">
             {loadingSummary ? (
               <p className="text-lg font-black">Loading…</p>
+            ) : editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") setEditingName(false); }}
+                  className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-ring w-64"
+                />
+                <button
+                  onClick={handleSaveName}
+                  disabled={nameSaving}
+                  className="rounded-lg p-1.5 hover:bg-emerald-100 text-emerald-600 transition"
+                >
+                  <Check size={16} />
+                </button>
+                <button onClick={() => setEditingName(false)} className="rounded-lg p-1.5 hover:bg-muted transition text-muted-foreground">
+                  <X size={16} />
+                </button>
+              </div>
             ) : (
-              <>
-                <p className="text-lg font-black">{summary?.fullName}</p>
-                <p className="text-xs text-muted-foreground">{summary?.email}</p>
-              </>
+              <div className="flex items-center gap-2">
+                <p className="text-lg font-black truncate">{summary?.fullName}</p>
+                <button
+                  onClick={() => setEditingName(true)}
+                  className="rounded-lg p-1 hover:bg-muted transition text-muted-foreground"
+                  title="Edit name"
+                >
+                  <Pencil size={13} />
+                </button>
+              </div>
             )}
+            {!editingName && <p className="text-xs text-muted-foreground">{summary?.email}</p>}
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-muted transition">
+          <button onClick={onClose} className="ml-3 rounded-lg p-1.5 hover:bg-muted transition">
             <X size={18} />
           </button>
         </div>
@@ -179,33 +326,14 @@ function UserDrawer({ userId, onClose }: { userId: string; onClose: () => void }
               {!tradesError && trades && trades.length > 0 && (
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      {["Symbol", "Strategy", "Entry", "Exit", "Size", "P&L", "R", "Outcome"].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-muted-foreground">{h}</th>
+                    <tr className="border-b border-border bg-muted/40 sticky top-0">
+                      {["Symbol / Sector", "Entry / Exit", "P&L", "R", "Confidence", "Outcome", ""].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {trades.map((t) => (
-                      <tr key={t.id} className="border-b border-border last:border-0 hover:bg-muted/20">
-                        <td className="px-3 py-2 font-bold">{t.symbol}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{t.strategy}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{new Date(t.entryDate).toLocaleDateString()}</td>
-                        <td className="px-3 py-2 text-muted-foreground">{t.exitDate ? new Date(t.exitDate).toLocaleDateString() : "—"}</td>
-                        <td className="px-3 py-2 font-mono">{t.size}</td>
-                        <td className={`px-3 py-2 font-bold ${t.pnl >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                          {currency.format(t.pnl)}
-                        </td>
-                        <td className={`px-3 py-2 font-mono ${t.rMultiple >= 0 ? "text-emerald-600" : "text-rose-500"}`}>
-                          {t.rMultiple.toFixed(2)}R
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge tone={t.outcome === "Win" ? "green" : t.outcome === "Loss" ? "red" : "slate"}>
-                            {t.outcome}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
+                    {trades.map((t) => <TradeRow key={t.id} t={t} />)}
                   </tbody>
                 </table>
               )}
@@ -480,7 +608,11 @@ export function AdminPage() {
       </Card>
 
       {selectedUserId && (
-        <UserDrawer userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+        <UserDrawer
+          userId={selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+          onUserUpdated={(updated) => setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))}
+        />
       )}
     </div>
   );
