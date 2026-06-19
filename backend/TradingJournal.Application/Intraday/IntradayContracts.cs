@@ -18,6 +18,8 @@ public sealed record IntradayTradeDto(
     Guid Id,
     string Symbol,
     string CompanyName,
+    string TradeType,
+    DateOnly? EntryDate,
     decimal TotalBuyQty,
     decimal TotalSellQty,
     decimal AvgBuyPrice,
@@ -35,12 +37,15 @@ public sealed record IntradaySessionDto(
     DateOnly SessionDate,
     string Broker,
     decimal TotalPnl,
+    decimal IntradayPnl,
+    decimal SwingPnl,
     int WinCount,
     int LossCount,
     int BreakevenCount,
     int TotalExecutions,
     List<string> Symbols,
-    List<IntradayTradeDto> IntradayTrades);
+    List<IntradayTradeDto> IntradayTrades,
+    int PromotedTradeCount);
 
 public sealed record IntradaySessionSummaryDto(
     Guid Id,

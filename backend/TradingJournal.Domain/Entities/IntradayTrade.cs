@@ -9,6 +9,8 @@ public sealed class IntradayTrade : Entity
     public IntradaySession Session { get; set; } = null!;
     public string Symbol { get; set; } = string.Empty;
     public string CompanyName { get; set; } = string.Empty;
+    public TradeType TradeType { get; set; }
+    public DateOnly? EntryDate { get; set; }
     public decimal TotalBuyQty { get; set; }
     public decimal TotalSellQty { get; set; }
     public decimal AvgBuyPrice { get; set; }

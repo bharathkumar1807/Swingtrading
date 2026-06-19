@@ -42,6 +42,13 @@ public sealed class IntradayController(IntradayService intraday) : ControllerBas
         return NoContent();
     }
 
+    [HttpPost("recalculate")]
+    public async Task<IActionResult> Recalculate(CancellationToken ct)
+    {
+        await intraday.RecalculateAllAsync(ct);
+        return NoContent();
+    }
+
     [HttpPost("debug-text")]
     [AllowAnonymous]
     [RequestSizeLimit(20_000_000)]

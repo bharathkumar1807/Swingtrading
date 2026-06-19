@@ -12,5 +12,6 @@ public interface IApplicationDbContext
     DbSet<Execution> Executions { get; }
     DbSet<DailyStockPlan> DailyStockPlans { get; }
     DbSet<DailyPlanLeg> DailyPlanLegs { get; }
+    DbSet<PositionLot> PositionLots { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

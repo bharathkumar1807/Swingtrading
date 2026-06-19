@@ -17,6 +17,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Execution> Executions => Set<Execution>();
     public DbSet<DailyStockPlan> DailyStockPlans => Set<DailyStockPlan>();
     public DbSet<DailyPlanLeg> DailyPlanLegs => Set<DailyPlanLeg>();
+    public DbSet<PositionLot> PositionLots => Set<PositionLot>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -73,6 +74,16 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(x => x.OpenBuyQty).HasPrecision(18, 4);
             entity.Property(x => x.PriorPositionSellQty).HasPrecision(18, 4);
             entity.HasMany(x => x.Executions).WithOne(x => x.IntradayTrade).HasForeignKey(x => x.IntradayTradeId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        builder.Entity<PositionLot>(entity =>
+        {
+            entity.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(x => x.Symbol).HasMaxLength(24).IsRequired();
+            entity.Property(x => x.CompanyName).HasMaxLength(200);
+            entity.Property(x => x.Price).HasPrecision(18, 4);
+            entity.Property(x => x.Qty).HasPrecision(18, 4);
+            entity.HasIndex(x => new { x.UserId, x.Symbol });
         });
 
         builder.Entity<Execution>(entity =>
@@ -227,6 +238,24 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                     ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "IsApproved" boolean NOT NULL DEFAULT true;
                     ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "LastActiveAt" timestamp with time zone;
                     ALTER TABLE "AspNetUsers" ADD COLUMN IF NOT EXISTS "JoinedAt" timestamp with time zone NOT NULL DEFAULT now();
+
+                    ALTER TABLE "IntradayTrades" ADD COLUMN IF NOT EXISTS "TradeType" integer NOT NULL DEFAULT 0;
+                    ALTER TABLE "IntradayTrades" ADD COLUMN IF NOT EXISTS "EntryDate" date NULL;
+
+                    CREATE TABLE IF NOT EXISTS "PositionLots" (
+                        "Id" uuid NOT NULL DEFAULT gen_random_uuid(),
+                        "UserId" character varying(450) NOT NULL DEFAULT '',
+                        "Symbol" character varying(24) NOT NULL DEFAULT '',
+                        "CompanyName" character varying(200) NOT NULL DEFAULT '',
+                        "Price" numeric(18,4) NOT NULL DEFAULT 0,
+                        "Qty" numeric(18,4) NOT NULL DEFAULT 0,
+                        "AcquiredDate" date NOT NULL,
+                        "SourceSessionId" uuid NOT NULL,
+                        "CreatedAtUtc" timestamp with time zone NOT NULL DEFAULT now(),
+                        "UpdatedAtUtc" timestamp with time zone,
+                        CONSTRAINT "PK_PositionLots" PRIMARY KEY ("Id")
+                    );
+                    CREATE INDEX IF NOT EXISTS "IX_PositionLots_UserId_Symbol" ON "PositionLots" ("UserId", "Symbol");
                     """);
             }
             else
@@ -366,6 +395,29 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                         ALTER TABLE AspNetUsers ADD LastActiveAt datetime2 NULL;
                     IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'AspNetUsers' AND COLUMN_NAME = 'JoinedAt')
                         ALTER TABLE AspNetUsers ADD JoinedAt datetime2 NOT NULL DEFAULT GETUTCDATE();
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'IntradayTrades' AND COLUMN_NAME = 'TradeType')
+                        ALTER TABLE IntradayTrades ADD TradeType int NOT NULL DEFAULT 0;
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'IntradayTrades' AND COLUMN_NAME = 'EntryDate')
+                        ALTER TABLE IntradayTrades ADD EntryDate date NULL;
+
+                    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PositionLots')
+                    BEGIN
+                        CREATE TABLE PositionLots (
+                            Id uniqueidentifier NOT NULL DEFAULT newid(),
+                            UserId nvarchar(450) NOT NULL DEFAULT '',
+                            Symbol nvarchar(24) NOT NULL DEFAULT '',
+                            CompanyName nvarchar(200) NOT NULL DEFAULT '',
+                            Price decimal(18,4) NOT NULL DEFAULT 0,
+                            Qty decimal(18,4) NOT NULL DEFAULT 0,
+                            AcquiredDate date NOT NULL,
+                            SourceSessionId uniqueidentifier NOT NULL,
+                            CreatedAtUtc datetime2 NOT NULL DEFAULT GETUTCDATE(),
+                            UpdatedAtUtc datetime2 NULL,
+                            CONSTRAINT PK_PositionLots PRIMARY KEY (Id)
+                        );
+                        CREATE INDEX IX_PositionLots_UserId_Symbol ON PositionLots (UserId, Symbol);
+                    END
                     """);
             }
         }

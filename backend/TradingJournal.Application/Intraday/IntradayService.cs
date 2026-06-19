@@ -34,12 +34,13 @@ public sealed partial class IntradayService(IApplicationDbContext db, IUserConte
         var tempSessionId = Guid.NewGuid();
         foreach (var e in executions) e.SessionId = tempSessionId;
 
-        var trades = IntradayMatchingEngine.Match(tempSessionId, executions);
+        // Preview uses no prior lots — swing trades will show as unknown-basis sells
+        var result = IntradayMatchingEngine.Match(tempSessionId, sessionDate, executions, []);
         return new IntradayPreviewDto(
             sessionDate,
             "Robinhood",
             executions.Count,
-            trades.Select(ToTradeDto).ToList());
+            result.Trades.Select(ToTradeDto).ToList());
     }
 
     public async Task<IntradaySessionDto> ImportAsync(Stream pdfStream, CancellationToken ct)
@@ -61,6 +62,7 @@ public sealed partial class IntradayService(IApplicationDbContext db, IUserConte
         if (existing is not null)
             throw new InvalidOperationException($"A session for {sessionDate:yyyy-MM-dd} already exists.");
 
+        // Save session + raw executions first (no matching yet)
         var session = new IntradaySession
         {
             UserId = userContext.UserId,
@@ -68,21 +70,144 @@ public sealed partial class IntradayService(IApplicationDbContext db, IUserConte
             Broker = "Robinhood",
             TotalExecutions = executions.Count,
         };
-
         foreach (var e in executions) e.SessionId = session.Id;
-        var trades = IntradayMatchingEngine.Match(session.Id, executions);
-
-        session.IntradayTrades = trades;
         session.Executions = executions;
-        session.TotalPnl = trades.Sum(t => t.Pnl);
-        session.WinCount = trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Win);
-        session.LossCount = trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Loss);
-        session.BreakevenCount = trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Breakeven);
 
         db.IntradaySessions.Add(session);
         await db.SaveChangesAsync(ct);
 
-        return ToSessionDto(session);
+        // Re-run matching for ALL sessions in chronological order so carry-forward is always correct
+        var promotedCounts = await RecalculateAllSessionsAsync(ct);
+
+        var refreshed = await db.IntradaySessions
+            .AsNoTracking()
+            .Where(s => s.Id == session.Id)
+            .Include(s => s.IntradayTrades).ThenInclude(t => t.Executions)
+            .Include(s => s.Executions)
+            .FirstAsync(ct);
+
+        return ToSessionDto(refreshed, promotedCounts.GetValueOrDefault(session.Id, 0));
+    }
+
+    public async Task RecalculateAllAsync(CancellationToken ct)
+        => await RecalculateAllSessionsAsync(ct);
+
+    private async Task<Dictionary<Guid, int>> RecalculateAllSessionsAsync(CancellationToken ct)
+    {
+        // Load all sessions with their raw executions and current trades, oldest first
+        var sessions = await db.IntradaySessions
+            .Where(s => s.UserId == userContext.UserId)
+            .Include(s => s.IntradayTrades)
+            .Include(s => s.Executions)
+            .OrderBy(s => s.SessionDate)
+            .ToListAsync(ct);
+
+        // Wipe all position lots, auto-promoted trades, and existing intraday trades
+        var allLots = await db.PositionLots
+            .Where(l => l.UserId == userContext.UserId)
+            .ToListAsync(ct);
+        db.PositionLots.RemoveRange(allLots);
+
+        var autoTrades = await db.Trades
+            .Where(t => t.UserId == userContext.UserId &&
+                        (t.Notes ?? "").StartsWith("Auto-imported · intraday session "))
+            .ToListAsync(ct);
+        db.Trades.RemoveRange(autoTrades);
+
+        foreach (var session in sessions)
+        {
+            foreach (var exec in session.Executions)
+                exec.IntradayTradeId = null;
+            db.IntradayTrades.RemoveRange(session.IntradayTrades);
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        foreach (var session in sessions)
+            session.IntradayTrades.Clear();
+
+        // Re-match each session in chronological order, accumulating carry-forward lots
+        var promotedCounts = new Dictionary<Guid, int>();
+
+        foreach (var session in sessions)
+        {
+            var symbols = session.Executions.Select(e => e.Symbol).Distinct().ToList();
+
+            var currentLots = await db.PositionLots
+                .Where(l => l.UserId == userContext.UserId && symbols.Contains(l.Symbol))
+                .OrderBy(l => l.AcquiredDate)
+                .ToListAsync(ct);
+
+            var priorLots = currentLots
+                .Select(l => new PriorLot(l.Symbol, l.CompanyName, l.Price, l.Qty, l.AcquiredDate, l.SourceSessionId))
+                .ToList();
+
+            var execList = session.Executions.OrderBy(e => e.SequenceOrder).ToList();
+            var matchResult = IntradayMatchingEngine.Match(session.Id, session.SessionDate, execList, priorLots);
+
+            foreach (var trade in matchResult.Trades)
+                db.IntradayTrades.Add(trade);
+
+            session.TotalPnl = matchResult.Trades.Sum(t => t.Pnl);
+            session.WinCount = matchResult.Trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Win);
+            session.LossCount = matchResult.Trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Loss);
+            session.BreakevenCount = matchResult.Trades.Count(t => t.Outcome == Domain.Enums.TradeOutcome.Breakeven);
+
+            // Replace carry-forward lots for this session's symbols
+            db.PositionLots.RemoveRange(currentLots);
+            foreach (var lot in matchResult.OpenLots)
+            {
+                db.PositionLots.Add(new Domain.Entities.PositionLot
+                {
+                    UserId = userContext.UserId,
+                    Symbol = lot.Symbol,
+                    CompanyName = lot.CompanyName,
+                    Price = lot.Price,
+                    Qty = lot.Qty,
+                    AcquiredDate = lot.AcquiredDate,
+                    SourceSessionId = lot.SourceSessionId,
+                });
+            }
+
+            // Promote overnight swing exits into the Trades tab
+            var promoted = 0;
+            foreach (var st in matchResult.Trades.Where(t =>
+                t.TradeType == TradeType.Swing &&
+                t.EntryDate.HasValue &&
+                t.EntryDate.Value < session.SessionDate))
+            {
+                var trade = new Trade
+                {
+                    UserId = userContext.UserId,
+                    Symbol = st.Symbol,
+                    Sector = string.Empty,
+                    Broker = session.Broker,
+                    Strategy = "Swing",
+                    ConfidenceScore = 0,
+                    Notes = $"Auto-imported · intraday session {session.Id:D}",
+                    ScreenshotUrl = null,
+                    EntryPrice = st.AvgBuyPrice,
+                    ExitPrice = st.AvgSellPrice,
+                    StopLoss = 0,
+                    Size = st.MatchedQty,
+                    Fees = 0,
+                    Slippage = 0,
+                    PositionType = PositionType.Long,
+                    EntryDate = st.EntryDate!.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    ExitDate = session.SessionDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    Tags = [],
+                    Mistakes = [],
+                };
+                trade.Recalculate();
+                db.Trades.Add(trade);
+                promoted++;
+            }
+
+            promotedCounts[session.Id] = promoted;
+            await db.SaveChangesAsync(ct);
+        }
+
+        return promotedCounts;
     }
 
     public async Task<List<IntradaySessionSummaryDto>> GetSessionsAsync(CancellationToken ct)
@@ -251,22 +376,36 @@ public sealed partial class IntradayService(IApplicationDbContext db, IUserConte
 
     // ── Mapping ─────────────────────────────────────────────────────────────────
 
-    private static IntradaySessionDto ToSessionDto(IntradaySession session) => new(
-        session.Id,
-        session.SessionDate,
-        session.Broker,
-        session.TotalPnl,
-        session.WinCount,
-        session.LossCount,
-        session.BreakevenCount,
-        session.TotalExecutions,
-        session.IntradayTrades.Select(t => t.Symbol).Distinct().ToList(),
-        session.IntradayTrades.Select(ToTradeDto).ToList());
+    private static IntradaySessionDto ToSessionDto(IntradaySession session, int promotedTradeCount = 0)
+    {
+        var intradayPnl = session.IntradayTrades
+            .Where(t => t.TradeType == Domain.Enums.TradeType.Intraday)
+            .Sum(t => t.Pnl);
+        var swingPnl = session.IntradayTrades
+            .Where(t => t.TradeType == Domain.Enums.TradeType.Swing)
+            .Sum(t => t.Pnl);
+        return new(
+            session.Id,
+            session.SessionDate,
+            session.Broker,
+            session.TotalPnl,
+            intradayPnl,
+            swingPnl,
+            session.WinCount,
+            session.LossCount,
+            session.BreakevenCount,
+            session.TotalExecutions,
+            session.IntradayTrades.Select(t => t.Symbol).Distinct().ToList(),
+            session.IntradayTrades.Select(ToTradeDto).ToList(),
+            promotedTradeCount);
+    }
 
     private static IntradayTradeDto ToTradeDto(IntradayTrade t) => new(
         t.Id,
         t.Symbol,
         t.CompanyName,
+        t.TradeType.ToString(),
+        t.EntryDate,
         t.TotalBuyQty,
         t.TotalSellQty,
         t.AvgBuyPrice,

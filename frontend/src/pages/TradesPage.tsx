@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { clearSelected, fetchTrades, setSelected, toggleSelected } from "@/store/tradesSlice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { tradesApi } from "@/services/tradesApi";
+import { TradesPerformancePanel } from "@/components/trades/TradesPerformancePanel";
 import { currency } from "@/lib/utils";
 import type { Trade } from "@/types";
 
@@ -110,6 +111,9 @@ export function TradesPage() {
           <Button onClick={() => setOpen(true)}><Plus size={16} /> Add trade</Button>
         </div>
       </div>
+      {!loading && data.items.length > 0 && (
+        <TradesPerformancePanel trades={data.items} />
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Trade blotter</CardTitle>

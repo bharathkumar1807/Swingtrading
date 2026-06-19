@@ -124,6 +124,8 @@ export interface IntradayTradeEntry {
   id: string;
   symbol: string;
   companyName: string;
+  tradeType: "Intraday" | "Swing";
+  entryDate?: string;
   totalBuyQty: number;
   totalSellQty: number;
   avgBuyPrice: number;
@@ -153,12 +155,15 @@ export interface IntradaySession {
   sessionDate: string;
   broker: string;
   totalPnl: number;
+  intradayPnl: number;
+  swingPnl: number;
   winCount: number;
   lossCount: number;
   breakevenCount: number;
   totalExecutions: number;
   symbols: string[];
   intradayTrades: IntradayTradeEntry[];
+  promotedTradeCount: number;
 }
 
 export interface IntradayPreview {
