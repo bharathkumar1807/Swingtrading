@@ -19,25 +19,27 @@ interface Bucket {
   tradeCount: number;
 }
 
+function tradeDate(trade: Trade): string {
+  return (trade.exitDate ?? trade.entryDate).split("T")[0];
+}
+
 function applyPeriod(trades: Trade[], period: Period): Trade[] {
-  const closed = trades.filter((t) => t.exitDate);
-  if (period === "All") return closed;
+  if (period === "All") return trades;
   const days = period === "7D" ? 7 : period === "30D" ? 30 : 90;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  return closed.filter((t) => new Date(t.exitDate!) >= cutoff);
+  return trades.filter((t) => new Date(tradeDate(t)) >= cutoff);
 }
 
 function parseDate(iso: string): Date {
-  const [y, m, d] = iso.split("T")[0].split("-").map(Number);
+  const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
 function weekMonday(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
   return d;
 }
 
@@ -47,31 +49,29 @@ function weekSunday(monday: Date): Date {
   return d;
 }
 
-function shortMD(date: Date): string {
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 function bucketize(trades: Trade[], groupBy: GroupBy): Bucket[] {
   const map = new Map<string, Bucket>();
 
   for (const trade of trades) {
-    const date = parseDate(trade.exitDate!);
+    const dateStr = tradeDate(trade);
+    const date = parseDate(dateStr);
     let key: string;
     let label: string;
     let sublabel: string;
 
     if (groupBy === "Day") {
-      key = trade.exitDate!.split("T")[0];
+      key = dateStr;
       label = date.toLocaleDateString("en-US", { weekday: "short" });
-      sublabel = shortMD(date);
+      sublabel = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     } else if (groupBy === "Week") {
       const mon = weekMonday(date);
       const sun = weekSunday(mon);
       key = `${mon.getFullYear()}-W${String(mon.getMonth()).padStart(2, "0")}-${String(mon.getDate()).padStart(2, "0")}`;
       label = mon.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      const sunFmt: Intl.DateTimeFormatOptions = sun.getMonth() !== mon.getMonth()
-        ? { month: "short", day: "numeric" }
-        : { day: "numeric" };
+      const sunFmt: Intl.DateTimeFormatOptions =
+        sun.getMonth() !== mon.getMonth()
+          ? { month: "short", day: "numeric" }
+          : { day: "numeric" };
       sublabel = `–${sun.toLocaleDateString("en-US", sunFmt)}`;
     } else {
       key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -103,8 +103,6 @@ export function TradesPerformancePanel({ trades }: Props) {
   const filtered = applyPeriod(trades, period);
   const buckets = bucketize(filtered, groupBy);
 
-  if (trades.filter((t) => t.exitDate).length === 0) return null;
-
   const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
   const wins = filtered.filter((t) => t.pnl > 0).length;
   const losses = filtered.filter((t) => t.pnl < 0).length;
@@ -112,9 +110,7 @@ export function TradesPerformancePanel({ trades }: Props) {
   const bestTrade = filtered.length > 0 ? Math.max(...filtered.map((t) => t.pnl)) : 0;
   const worstTrade = filtered.length > 0 ? Math.min(...filtered.map((t) => t.pnl)) : 0;
   const avgPerBucket = buckets.length > 0 ? totalPnl / buckets.length : 0;
-
   const maxAbsPnl = Math.max(...buckets.map((b) => Math.abs(b.pnl)), 1);
-
   const groupLabel = groupBy === "Day" ? "day" : groupBy === "Week" ? "week" : "month";
 
   return (
@@ -122,7 +118,6 @@ export function TradesPerformancePanel({ trades }: Props) {
       <CardContent className="space-y-4 pt-5">
         {/* Controls row */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Period selector */}
           <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
             {PERIODS.map((p) => (
               <button
@@ -138,8 +133,6 @@ export function TradesPerformancePanel({ trades }: Props) {
               </button>
             ))}
           </div>
-
-          {/* Group-by selector */}
           <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
             {GROUPS.map((g) => (
               <button
@@ -165,40 +158,31 @@ export function TradesPerformancePanel({ trades }: Props) {
               {currency.format(totalPnl)}
             </p>
           </div>
-
           <div className="h-10 w-px bg-border" />
-
           <div>
             <p className="text-xs text-muted-foreground">Win rate</p>
             <p className={`text-lg font-bold ${winRate >= 50 ? "text-emerald-600" : "text-rose-600"}`}>
               {winRate}%
             </p>
           </div>
-
           <div>
             <p className="text-xs text-muted-foreground">Winners</p>
             <p className="text-lg font-bold text-emerald-600">{wins}</p>
           </div>
-
           <div>
             <p className="text-xs text-muted-foreground">Losers</p>
             <p className="text-lg font-bold text-rose-600">{losses}</p>
           </div>
-
           <div className="h-10 w-px bg-border" />
-
           <div>
             <p className="text-xs text-muted-foreground">Best trade</p>
             <p className="text-sm font-bold text-emerald-600">{currency.format(bestTrade)}</p>
           </div>
-
           <div>
             <p className="text-xs text-muted-foreground">Worst trade</p>
             <p className="text-sm font-bold text-rose-600">{currency.format(worstTrade)}</p>
           </div>
-
           <div className="h-10 w-px bg-border" />
-
           <div>
             <p className="text-xs text-muted-foreground">Avg / {groupLabel}</p>
             <p className={`text-sm font-bold ${avgPerBucket >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
@@ -210,7 +194,7 @@ export function TradesPerformancePanel({ trades }: Props) {
         {/* Bucket strip */}
         {buckets.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No closed trades in this period.
+            No trades in this period.
           </p>
         ) : (
           <div className="relative">
