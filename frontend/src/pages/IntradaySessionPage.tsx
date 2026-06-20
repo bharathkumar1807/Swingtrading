@@ -79,12 +79,9 @@ export function IntradaySessionPage() {
   const carryingForward = intradayTrades.filter((t) => !t.isFullyClosed);
 
   const intradayPnl = intradayTrades.reduce((s, t) => s + t.pnl, 0);
-  const swingPnl = swingTrades.reduce((s, t) => s + t.pnl, 0);
-  const totalPnl = intradayPnl + swingPnl;
 
-  const allForStats = [...swingTrades, ...intradayTrades];
-  const winCount = allForStats.filter((t) => t.pnl > 0).length;
-  const lossCount = allForStats.filter((t) => t.pnl < 0).length;
+  const winCount = intradayTrades.filter((t) => t.pnl > 0).length;
+  const lossCount = intradayTrades.filter((t) => t.pnl < 0).length;
   const winRate = (winCount + lossCount) > 0
     ? Math.round((winCount / (winCount + lossCount)) * 100)
     : 0;
@@ -132,29 +129,13 @@ export function IntradaySessionPage() {
       )}
 
       {/* KPI strip */}
-      <div className={`grid grid-cols-2 gap-3 ${hasSwing ? "md:grid-cols-6" : "md:grid-cols-5"}`}>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <KpiCard label="Intraday P&L" value={currency.format(intradayPnl)} positive={intradayPnl >= 0} />
-        {hasSwing && (
-          <KpiCard label="Swing P&L" value={currency.format(swingPnl)} positive={swingPnl >= 0} accent="violet" />
-        )}
         <KpiCard label="Win rate" value={`${winRate}%`} positive={winRate >= 50} />
         <KpiCard label="Winners" value={`${winCount}`} positive />
         <KpiCard label="Losers" value={`${lossCount}`} positive={false} neutral={lossCount === 0} />
-        <KpiCard label="Symbols" value={`${baseTrades.length}`} positive />
+        <KpiCard label="Symbols" value={`${intradayTrades.length}`} positive />
       </div>
-
-      {/* Total P&L summary when swing exists */}
-      {hasSwing && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-4 py-2.5">
-          <span className="text-xs font-semibold text-muted-foreground uppercase">Total Day P&L</span>
-          <span className={`ml-auto text-lg font-black ${totalPnl >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-            {currency.format(totalPnl)}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            ({currency.format(intradayPnl)} intraday + {currency.format(swingPnl)} swing)
-          </span>
-        </div>
-      )}
 
       {/* Symbol filter pills */}
       <div className="flex flex-wrap gap-2">
